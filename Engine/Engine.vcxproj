@@ -145,6 +145,8 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClInclude Include="header\event\KeyboardEvent.h" />
+    <ClInclude Include="header\event\MouseEvent.h" />
     <ClInclude Include="header\platform\WindowsWindow.h" />
     <ClInclude Include="header\core\Delegate.h" />
     <ClInclude Include="header\core\AppLayerStack.h" />
@@ -157,6 +159,7 @@
     <ClInclude Include="header\FGEngine.h" />
     <ClInclude Include="header\core\Logger.h" />
     <ClInclude Include="pch.h" />
+    <ClInclude Include="header\event\WindowEvent.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\core\Window.cpp" />

@@ -31,10 +31,14 @@ namespace FGEngine
 		void PopOverlay(AppLayer* appLayer);
 
 	private:
+		void OnWindowEvent(const IWindowEvent& windowEvent);
+
+	private:
 		bool bIsRunning;
 #pragma warning (suppress : 4251)
 		std::unique_ptr<IWindow> window;
 		AppLayerStack layerStack;
+		DelegateHandle windowEventHandle;
 	};
 
 	// to be defined in client

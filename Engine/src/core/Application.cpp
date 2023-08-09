@@ -8,6 +8,7 @@ namespace FGEngine
 	{
 		bIsRunning = true;
 		window = std::unique_ptr<IWindow>(IWindow::Create());
+		windowEventHandle = window->windowDelegate->Add1(this, Application::OnWindowEvent);
 	}
 
 	Application::~Application()
@@ -17,12 +18,15 @@ namespace FGEngine
 
 	void Application::Run()
 	{
-		for (AppLayer* appLayer : layerStack)
+		while (bIsRunning)
 		{
-			appLayer->OnUpdate(0);
-		}
+			for (AppLayer* appLayer : layerStack)
+			{
+				appLayer->OnUpdate(0);
+			}
 
-		window->OnUpdate(0);
+			window->OnUpdate(0);
+		}
 	}
 
 	bool Application::CanClose()
@@ -53,5 +57,18 @@ namespace FGEngine
 	void Application::PopOverlay(AppLayer* appLayer)
 	{
 		layerStack.PopOverlay(appLayer);
+	}
+
+	void Application::OnWindowEvent(const IWindowEvent& windowEvent)
+	{
+		LogInfo("Window Event (%s)", windowEvent.ToString().c_str());
+		switch (windowEvent.GetEventType())
+		{
+		case EWindowEventType::WindowClose:
+		{
+			bIsRunning = false;
+		}
+		break;
+		}
 	}
 }

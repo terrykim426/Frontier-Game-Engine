@@ -1,7 +1,8 @@
 #pragma once
 
-#include "core/Window.h"
 #include "GLFW/glfw3.h"
+
+#include "core/Window.h"
 
 namespace FGEngine
 {
@@ -22,9 +23,12 @@ namespace FGEngine
 		virtual void Init(const WindowProperties& windowProperties);
 		virtual void Shutdown();
 
+		virtual void OnWindowEvent(const IWindowEvent& windowEvent);
+
 	private:
 		static bool bIsInitialized;
 		GLFWwindow* nativeWindow;
+		DelegateHandle windowEventHandle;
 
 		struct WindowData
 		{
@@ -33,6 +37,8 @@ namespace FGEngine
 			unsigned int height;
 
 			bool bVSync;
+
+			DELEGATE_PTR(WindowDelegate, windowDelegate);
 		};
 		WindowData windowData;
 	};

@@ -52,7 +52,7 @@ namespace FGEngine
 		virtual void Remove(const DelegateHandle& handle) = 0;
 	};
 
-	struct DelegateHandle
+	struct ENGINE_API DelegateHandle
 	{
 	public:
 		DelegateHandle() = default;
@@ -100,6 +100,7 @@ namespace FGEngine
 
 	private:
 		unsigned int key = 0;
+#pragma warning (suppress : 4251)
 		std::weak_ptr<DelegateBase> delegate;
 	};
 

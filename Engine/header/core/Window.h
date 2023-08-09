@@ -2,6 +2,11 @@
 
 #include <string>
 
+#include "core/Delegate.h"
+#include "event/WindowEvent.h"
+
+DECLARE_DELEGATE_ONE(Window, const FGEngine::IWindowEvent&);
+
 namespace FGEngine
 {
 	struct WindowProperties
@@ -33,6 +38,8 @@ namespace FGEngine
 		virtual void OnUpdate(float deltaTime) = 0;
 		virtual void SetVSync(bool bEnable) = 0;
 		virtual bool IsVSync() = 0;
+
+		DELEGATE_PTR(WindowDelegate, windowDelegate);
 
 		static IWindow* Create(const WindowProperties& properties = WindowProperties());
 	};
