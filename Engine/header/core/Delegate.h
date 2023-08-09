@@ -99,7 +99,7 @@ namespace FGEngine
 		}
 
 	private:
-		unsigned int key;
+		unsigned int key = 0;
 		std::weak_ptr<DelegateBase> delegate;
 	};
 
@@ -148,6 +148,6 @@ namespace FGEngine
 	private:
 #pragma warning (suppress : 4251)
 		std::unordered_map<unsigned int, std::function<void(Params...)>> funcMap;
-		unsigned int nextKeyId;
+		unsigned int nextKeyId = 0;
 	};
 }

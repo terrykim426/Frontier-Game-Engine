@@ -1,6 +1,9 @@
 #pragma once
 
 #include "core/AppLayerStack.h"
+#include "core/Window.h"
+
+#include <memory>
 
 
 int main(int argc, char** argv);
@@ -29,6 +32,8 @@ namespace FGEngine
 
 	private:
 		bool bIsRunning;
+#pragma warning (suppress : 4251)
+		std::unique_ptr<IWindow> window;
 		AppLayerStack layerStack;
 	};
 

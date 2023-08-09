@@ -7,10 +7,12 @@ namespace FGEngine
 	Application::Application()
 	{
 		bIsRunning = true;
+		window = std::unique_ptr<IWindow>(IWindow::Create());
 	}
 
 	Application::~Application()
 	{
+		window.reset();
 	}
 
 	void Application::Run()
@@ -19,6 +21,8 @@ namespace FGEngine
 		{
 			appLayer->OnUpdate(0);
 		}
+
+		window->OnUpdate(0);
 	}
 
 	bool Application::CanClose()
