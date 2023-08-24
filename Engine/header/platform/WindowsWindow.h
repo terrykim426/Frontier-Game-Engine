@@ -3,6 +3,7 @@
 #include "GLFW/glfw3.h"
 
 #include "core/Window.h"
+#include "renderer/RendererProperties.h"
 
 namespace FGEngine
 {
@@ -28,6 +29,7 @@ namespace FGEngine
 	private:
 		static bool bIsInitialized;
 		GLFWwindow* nativeWindow;
+		ERendererAPI rendererAPI;
 		DelegateHandle windowEventHandle;
 
 		struct WindowData

@@ -60,6 +60,21 @@
     <ClInclude Include="header\event\KeyboardEvent.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="header\renderer\Renderer.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="header\renderer\RendererAPI.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="header\platform\openGL\OpenGLRendererAPI.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="header\platform\vulkan\VulkanRendererAPI.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="header\renderer\RendererProperties.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="dllmain.cpp">
@@ -83,5 +98,21 @@
     <ClCompile Include="src\core\Window.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="src\core\Renderer.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\renderer\RendererAPI.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\platform\openGL\OpenGLRendererAPI.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\platform\vulkan\VulkanRendererAPI.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="shader\TestShader.vert" />
+    <None Include="shader\TestShader.frag" />
   </ItemGroup>
 </Project>

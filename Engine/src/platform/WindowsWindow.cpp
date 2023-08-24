@@ -3,6 +3,7 @@
 #include "core/Logger.h"
 #include "event/MouseEvent.h"
 #include "event/KeyboardEvent.h"
+#include "renderer/Renderer.h"
 
 #include <iostream>
 
@@ -38,90 +39,116 @@ namespace FGEngine
 			windowEventHandle = windowData.windowDelegate->Add1(this, WindowsWindow::OnWindowEvent);
 		}
 
+		// TODO: to be set from external source
+		//rendererAPI = ERendererAPI::OpenGL;
+		rendererAPI = ERendererAPI::Vulkan;
+
+		if (rendererAPI == ERendererAPI::Vulkan)
+		{
+			glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
+		}
+
 		nativeWindow = glfwCreateWindow(windowData.width, windowData.height, windowData.title.c_str(), nullptr, nullptr);
-		glfwMakeContextCurrent(nativeWindow);
+
+		if (rendererAPI == ERendererAPI::OpenGL)
+		{
+			glfwMakeContextCurrent(nativeWindow);
+		}
 		glfwSetWindowUserPointer(nativeWindow, &windowData);
 
 		SetVSync(true);
 
+		Renderer::Init(RendererProperties(rendererAPI, nativeWindow));
+		//Renderer::SetClearColor(1, 0, 1, 1);
+		Renderer::SetClearColor(0, 0, 0, 1);
+
 		glfwSetWindowSizeCallback(nativeWindow, [](GLFWwindow* glWindow, int width, int height)
-								  {
-									  auto* data = (WindowData*)glfwGetWindowUserPointer(glWindow);
-									  data->width = width;
-									  data->height = height;
-									  data->windowDelegate->Broadcast(WindowResizeEvent(width, height));
-								  });
+			{
+				auto* data = (WindowData*)glfwGetWindowUserPointer(glWindow);
+				data->width = width;
+				data->height = height;
+				data->windowDelegate->Broadcast(WindowResizeEvent(width, height));
+			});
 
 		glfwSetWindowCloseCallback(nativeWindow, [](GLFWwindow* window)
-								   {
-									   auto* data = (WindowData*)glfwGetWindowUserPointer(window);
-									   data->windowDelegate->Broadcast(WindowClosedEvent());
-								   });
+			{
+				auto* data = (WindowData*)glfwGetWindowUserPointer(window);
+				data->windowDelegate->Broadcast(WindowClosedEvent());
+			});
 
 		glfwSetWindowFocusCallback(nativeWindow, [](GLFWwindow* glWindow, int focused)
-								   {
-									   auto* data = (WindowData*)glfwGetWindowUserPointer(glWindow);
-									   data->windowDelegate->Broadcast(WindowFocusChangedEvent(focused));
-								   });
+			{
+				auto* data = (WindowData*)glfwGetWindowUserPointer(glWindow);
+				data->windowDelegate->Broadcast(WindowFocusChangedEvent(focused));
+			});
 
 
 		glfwSetCursorPosCallback(nativeWindow, [](GLFWwindow* glWindow, double xpos, double ypos)
-								 {
-									 auto* data = (WindowData*)glfwGetWindowUserPointer(glWindow);
-									 data->windowDelegate->Broadcast(CursorPositionEvent(xpos, ypos));
-								 });
+			{
+				auto* data = (WindowData*)glfwGetWindowUserPointer(glWindow);
+				data->windowDelegate->Broadcast(CursorPositionEvent(xpos, ypos));
+			});
 
 		glfwSetCursorEnterCallback(nativeWindow, [](GLFWwindow* glWindow, int entered)
-								   {
-									   auto* data = (WindowData*)glfwGetWindowUserPointer(glWindow);
-									   data->windowDelegate->Broadcast(CursorEnterChangedEvent(entered));
-								   });
+			{
+				auto* data = (WindowData*)glfwGetWindowUserPointer(glWindow);
+				data->windowDelegate->Broadcast(CursorEnterChangedEvent(entered));
+			});
 
 		glfwSetMouseButtonCallback(nativeWindow, [](GLFWwindow* glWindow, int button, int action, int mods)
-								   {
-									   auto* data = (WindowData*)glfwGetWindowUserPointer(glWindow);
-									   switch (action)
-									   {
-									   case GLFW_PRESS:
-										   data->windowDelegate->Broadcast(MousePressedEvent(button, mods));
-										   break;
-									   case GLFW_RELEASE:
-										   data->windowDelegate->Broadcast(MouseReleasedEvent(button, mods));
-										   break;
-									   }
-								   });
+			{
+				auto* data = (WindowData*)glfwGetWindowUserPointer(glWindow);
+				switch (action)
+				{
+				case GLFW_PRESS:
+					data->windowDelegate->Broadcast(MousePressedEvent(button, mods));
+					break;
+				case GLFW_RELEASE:
+					data->windowDelegate->Broadcast(MouseReleasedEvent(button, mods));
+					break;
+				}
+			});
 
 		glfwSetScrollCallback(nativeWindow, [](GLFWwindow* glWindow, double xoffset, double yoffset)
-							  {
-								  auto* data = (WindowData*)glfwGetWindowUserPointer(glWindow);
-								  data->windowDelegate->Broadcast(MouseScrolledEvent(xoffset, yoffset));
-							  });
+			{
+				auto* data = (WindowData*)glfwGetWindowUserPointer(glWindow);
+				data->windowDelegate->Broadcast(MouseScrolledEvent(xoffset, yoffset));
+			});
 
 		glfwSetKeyCallback(nativeWindow, [](GLFWwindow* glWindow, int key, int scancode, int action, int mods)
-						   {
-							   auto* data = (WindowData*)glfwGetWindowUserPointer(glWindow);
-							   switch (action)
-							   {
-							   case GLFW_PRESS:
-								   data->windowDelegate->Broadcast(KeyPressedEvent(key, mods));
-								   break;
-							   case GLFW_RELEASE:
-								   data->windowDelegate->Broadcast(KeyReleasedEvent(key, mods));
-								   break;
-							   case GLFW_REPEAT:
-								   data->windowDelegate->Broadcast(KeyRepeatedEvent(key, mods));
-								   break;
-							   }
-						   });
+			{
+				auto* data = (WindowData*)glfwGetWindowUserPointer(glWindow);
+				switch (action)
+				{
+				case GLFW_PRESS:
+					data->windowDelegate->Broadcast(KeyPressedEvent(key, mods));
+					break;
+				case GLFW_RELEASE:
+					data->windowDelegate->Broadcast(KeyReleasedEvent(key, mods));
+					break;
+				case GLFW_REPEAT:
+					data->windowDelegate->Broadcast(KeyRepeatedEvent(key, mods));
+					break;
+				}
+			});
 	}
 
 	void WindowsWindow::Shutdown()
 	{
+		Renderer::Shutdown();
 		glfwDestroyWindow(nativeWindow);
+		glfwTerminate();
 	}
 
 	void WindowsWindow::OnWindowEvent(const IWindowEvent& windowEvent)
 	{
+		switch (windowEvent.GetEventType())
+		{
+		case EWindowEventType::WindowResize:
+			Renderer::Resize();
+			break;
+		}
+
 		windowDelegate->Broadcast(windowEvent);
 	}
 
@@ -137,11 +164,11 @@ namespace FGEngine
 
 	void WindowsWindow::OnUpdate(float deltaTime)
 	{
-		glClearColor(1, 0, 1, 1);
-		glClear(GL_COLOR_BUFFER_BIT);
+		Renderer::Clear();
 
 		glfwPollEvents();
-		glfwSwapBuffers(nativeWindow);
+
+		Renderer::Render(nativeWindow);
 	}
 
 	void WindowsWindow::SetVSync(bool bEnable)
