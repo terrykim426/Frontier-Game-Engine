@@ -8,7 +8,7 @@
 #define LogError(format, ...) FGEngine::Logger::__Log(__FILE__, __LINE__, FGEngine::Logger::ELevel::Error, format, ##__VA_ARGS__);
 #define LogAssert(format, ...) \
     LogError(format, ##__VA_ARGS__); \
-    __debugbreak();
+    abort();
 
 #define Ensure(condition, format, ...) if(!(condition)){LogWarning(format, ##__VA_ARGS__)};
 #define Check(condition, format, ...) if(!(condition)){LogAssert(format, ##__VA_ARGS__)};

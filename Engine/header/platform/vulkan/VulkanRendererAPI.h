@@ -41,18 +41,23 @@ namespace FGEngine
 		void CreateSwapChain();
 		void CreateImageViews();
 		void CreateRenderPass();
+		void CreateDescriptorSetLayout();
 		void CreateGraphicsPipeline();
 		void CreateFrameBuffers();
 		void CreateCommandPool();
 		void CreateBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkBuffer& buffer, VkDeviceMemory& bufferMemory);
 		void CreateVertexBuffer();
 		void CreateIndexBuffer();
+		void CreateUniformBuffer();
+		void CreateDescriptorPool();
+		void CreateDescriptorSets();
 		void CreateCommandBuffers();
 		void CreateSyncObjects();
 
 		void CleanUpSwapChain();
 		void RecreateSwapChain();
 
+		void UpdateUniformBuffer(uint32_t currentImage);
 		void RecordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex);
 
 		bool CheckValidationLayerSupport();
@@ -70,6 +75,9 @@ namespace FGEngine
 		VkQueue graphicsQueue;
 		VkQueue presentQueue;
 		VkRenderPass renderPass;
+		VkDescriptorSetLayout descriptorSetLayout;
+		VkDescriptorPool descriptorPool;
+		std::vector<VkDescriptorSet> descriptorSets;
 		VkPipelineLayout pipelineLayout;
 		VkPipeline graphicsPipeline;
 		VkCommandPool commandPool;
@@ -78,6 +86,10 @@ namespace FGEngine
 		VkDeviceMemory vertexBufferMemory;
 		VkBuffer indexBuffer;
 		VkDeviceMemory indexBufferMemory;
+
+		std::vector<VkBuffer> uniformBuffers;
+		std::vector<VkDeviceMemory> uniformBuffersMemory;
+		std::vector<void*> uniformBuffersMapped;
 
 		std::vector<VkImage> swapChainImages;
 		std::vector<VkImageView> swapChainImageViews;
@@ -157,6 +169,16 @@ namespace FGEngine
 			0, 1, 2, 2, 3, 0
 		};
 #pragma endregion
+
+#pragma region Descriptor
+		struct UniformBufferObject
+		{
+			alignas(16) glm::mat4 model;
+			alignas(16) glm::mat4 view;
+			alignas(16) glm::mat4 projection;
+		};
+#pragma endregion
+
 	};
 }
 
