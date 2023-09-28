@@ -13,6 +13,9 @@ namespace FGEngine
 		WindowsWindow(const WindowProperties& windowProperties);
 		virtual ~WindowsWindow() override;
 
+		WindowsWindow(const WindowsWindow&) = delete;
+		WindowsWindow& operator=(const WindowsWindow&) = delete;
+
 		// Inherited via IWindow
 		virtual unsigned int GetWidth() const override;
 		virtual unsigned int GetHeight() const override;

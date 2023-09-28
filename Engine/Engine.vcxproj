@@ -112,7 +112,7 @@
       <ConformanceMode>true</ConformanceMode>
       <PrecompiledHeader>Use</PrecompiledHeader>
       <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
-      <AdditionalIncludeDirectories>$(ProjectDir)vendor\vulkan\Include;$(ProjectDir)vendor\glm;$(ProjectDir)vendor\glfw\include;$(ProjectDir)header;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(ProjectDir)vendor\stb;$(ProjectDir)vendor\vulkan\Include;$(ProjectDir)vendor\glm;$(ProjectDir)vendor\glfw\include;$(ProjectDir)header;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <LanguageStandard>stdcpp17</LanguageStandard>
     </ClCompile>
     <Link>
@@ -133,7 +133,7 @@
       <ConformanceMode>true</ConformanceMode>
       <PrecompiledHeader>Use</PrecompiledHeader>
       <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
-      <AdditionalIncludeDirectories>$(ProjectDir)vendor\vulkan\Include;$(ProjectDir)vendor\glm;$(ProjectDir)vendor\glfw\include;$(ProjectDir)header;</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(ProjectDir)vendor\stb;$(ProjectDir)vendor\vulkan\Include;$(ProjectDir)vendor\glm;$(ProjectDir)vendor\glfw\include;$(ProjectDir)header;</AdditionalIncludeDirectories>
       <LanguageStandard>stdcpp17</LanguageStandard>
     </ClCompile>
     <Link>
@@ -167,6 +167,7 @@
     <ClInclude Include="header\event\WindowEvent.h" />
     <ClInclude Include="header\renderer\RendererAPI.h" />
     <ClInclude Include="header\platform\vulkan\VulkanRendererAPI.h" />
+    <ClInclude Include="header\renderer\Texture.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\platform\openGL\OpenGLRendererAPI.cpp" />
@@ -185,6 +186,7 @@
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Create</PrecompiledHeader>
     </ClCompile>
     <ClCompile Include="src\platform\vulkan\VulkanRendererAPI.cpp" />
+    <ClCompile Include="src\renderer\Texture.cpp" />
   </ItemGroup>
   <ItemGroup>
     <None Include="shader\TestShader.frag" />

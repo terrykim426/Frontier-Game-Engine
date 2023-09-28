@@ -45,6 +45,10 @@ namespace FGEngine
 		void CreateGraphicsPipeline();
 		void CreateFrameBuffers();
 		void CreateCommandPool();
+		void CreateImage(uint32_t width, uint32_t height, VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage, VkMemoryPropertyFlags properties, VkImage& image, VkDeviceMemory& imageMemory);
+		void CreateTextureImage();
+		void CreateTextureImageView();
+		void CreateTextureSampler();
 		void CreateBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkBuffer& buffer, VkDeviceMemory& bufferMemory);
 		void CreateVertexBuffer();
 		void CreateIndexBuffer();
@@ -102,6 +106,11 @@ namespace FGEngine
 		std::vector<VkSemaphore> renderFinishedSemaphores;
 		std::vector<VkFence> inFlightFences;
 
+		VkImage textureImage;
+		VkDeviceMemory textureImageMemory;
+		VkImageView textureImageView;
+		VkSampler textureSampler;
+
 		uint32_t currentFrame = 0;
 		bool bResizeRequested = false;
 
@@ -129,6 +138,7 @@ namespace FGEngine
 		{
 			glm::vec2 pos;
 			glm::vec3 color;
+			glm::vec2 texCoord;
 
 			static VkVertexInputBindingDescription GetBindingDescription()
 			{
@@ -140,9 +150,9 @@ namespace FGEngine
 				return bindingDescription;
 			}
 
-			static std::array<VkVertexInputAttributeDescription, 2> GetAttributeDescriptions()
+			static std::array<VkVertexInputAttributeDescription, 3> GetAttributeDescriptions()
 			{
-				std::array<VkVertexInputAttributeDescription, 2> attributeDescriptions{};
+				std::array<VkVertexInputAttributeDescription, 3> attributeDescriptions{};
 				attributeDescriptions[0].binding = 0;
 				attributeDescriptions[0].location = 0;
 				attributeDescriptions[0].format = VK_FORMAT_R32G32_SFLOAT;
@@ -153,16 +163,21 @@ namespace FGEngine
 				attributeDescriptions[1].format = VK_FORMAT_R32G32B32_SFLOAT;
 				attributeDescriptions[1].offset = offsetof(Vertex, color);
 
+				attributeDescriptions[2].binding = 0;
+				attributeDescriptions[2].location = 2;
+				attributeDescriptions[2].format = VK_FORMAT_R32G32_SFLOAT;
+				attributeDescriptions[2].offset = offsetof(Vertex, texCoord);
+
 				return attributeDescriptions;
 			}
 		};
 
 		const std::vector<Vertex> vertices =
 		{
-			{{-0.5f, -0.5f}, {1.0f, 0.0f, 0.0f}},
-			{{0.5f, -0.5f}, {0.0f, 1.0f, 0.0f}},
-			{{0.5f, 0.5f}, {0.0f, 0.0f, 1.0f}},
-			{{-0.5f, 0.5f}, {1.0f, 1.0f, 1.0f}}
+			{{-0.5f, -0.5f}, {1.0f, 0.0f, 0.0f}, {1.0f, 0.0f}},
+			{{0.5f, -0.5f}, {0.0f, 1.0f, 0.0f}, {0.0f, 0.0f}},
+			{{0.5f, 0.5f}, {0.0f, 0.0f, 1.0f}, {0.0f, 1.0f}},
+			{{-0.5f, 0.5f}, {1.0f, 1.0f, 1.0f}, {1.0f, 1.0f}}
 		};
 
 		const std::vector<uint16_t> indices = {

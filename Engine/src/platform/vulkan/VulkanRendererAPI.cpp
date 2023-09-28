@@ -1,6 +1,7 @@
 #include "pch.h"
 #include "platform/vulkan/VulkanRendererAPI.h"
 #include "core/Logger.h"
+#include "renderer/Texture.h"
 
 #include <algorithm>
 #include <fstream>
@@ -208,7 +209,7 @@ namespace FGEngine
 		NoEntry("Failed to find suitable memory type");
 	}
 
-	static void CopyBuffer(VkDevice device, VkCommandPool commandPool, VkQueue queue, VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize size)
+	static VkCommandBuffer BeginSingleTimeCommands(VkDevice device, VkCommandPool commandPool)
 	{
 		VkCommandBufferAllocateInfo allocateInfo{};
 		allocateInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
@@ -224,6 +225,28 @@ namespace FGEngine
 		beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
 
 		vkBeginCommandBuffer(commandBuffer, &beginInfo);
+
+		return commandBuffer;
+	}
+
+	static void EndSingleTimeCommands(VkDevice device, VkQueue graphicsQueue, VkCommandPool commandPool, VkCommandBuffer commandBuffer)
+	{
+		vkEndCommandBuffer(commandBuffer);
+
+		VkSubmitInfo submitInfo{};
+		submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+		submitInfo.commandBufferCount = 1;
+		submitInfo.pCommandBuffers = &commandBuffer;
+
+		vkQueueSubmit(graphicsQueue, 1, &submitInfo, VK_NULL_HANDLE);
+		vkQueueWaitIdle(graphicsQueue);
+
+		vkFreeCommandBuffers(device, commandPool, 1, &commandBuffer);
+	}
+
+	static void CopyBuffer(VkDevice device, VkCommandPool commandPool, VkQueue queue, VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize size)
+	{
+		VkCommandBuffer commandBuffer = BeginSingleTimeCommands(device, commandPool);
 		{
 			VkBufferCopy copyRegion{};
 			copyRegion.srcOffset = 0;
@@ -232,17 +255,105 @@ namespace FGEngine
 
 			vkCmdCopyBuffer(commandBuffer, srcBuffer, dstBuffer, 1, &copyRegion);
 		}
-		vkEndCommandBuffer(commandBuffer);
+		EndSingleTimeCommands(device, queue, commandPool, commandBuffer);
+	}
 
-		VkSubmitInfo submitInfo{};
-		submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-		submitInfo.commandBufferCount = 1;
-		submitInfo.pCommandBuffers = &commandBuffer;
+	static void TransitionImageLayout(VkDevice device, VkCommandPool commandPool, VkQueue queue, VkImage image, VkFormat format, VkImageLayout oldLayout, VkImageLayout newLayout)
+	{
+		VkCommandBuffer commandBuffer = BeginSingleTimeCommands(device, commandPool);
+		{
+			VkImageMemoryBarrier barrier{};
+			barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+			barrier.oldLayout = oldLayout;
+			barrier.newLayout = newLayout;
+			barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+			barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+			barrier.image = image;
+			barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+			barrier.subresourceRange.baseMipLevel = 0;
+			barrier.subresourceRange.levelCount = 1;
+			barrier.subresourceRange.baseArrayLayer = 0;
+			barrier.subresourceRange.layerCount = 1;
 
-		vkQueueSubmit(queue, 1, &submitInfo, VK_NULL_HANDLE);
-		vkQueueWaitIdle(queue);
+			VkPipelineStageFlags sourceStage;
+			VkPipelineStageFlags destinationStage;
+			if (oldLayout == VK_IMAGE_LAYOUT_UNDEFINED && newLayout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL)
+			{
+				barrier.srcAccessMask = 0;
+				barrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
 
-		vkFreeCommandBuffers(device, commandPool, 1, &commandBuffer);
+				sourceStage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
+				destinationStage = VK_PIPELINE_STAGE_TRANSFER_BIT;
+			}
+			else if (oldLayout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL && newLayout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL)
+			{
+				barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+				barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+
+				sourceStage = VK_PIPELINE_STAGE_TRANSFER_BIT;
+				destinationStage = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+			}
+			else
+			{
+				NoEntry("Unsupported layout transition!");
+			}
+
+
+			vkCmdPipelineBarrier(commandBuffer,
+				sourceStage, destinationStage,
+				0,
+				0, nullptr,
+				0, nullptr,
+				1, &barrier);
+		}
+		EndSingleTimeCommands(device, queue, commandPool, commandBuffer);
+	}
+
+	static void CopyBufferToImage(VkDevice device, VkCommandPool commandPool, VkQueue queue, VkBuffer buffer, VkImage image, uint32_t width, uint32_t height)
+	{
+		VkCommandBuffer commandBuffer = BeginSingleTimeCommands(device, commandPool);
+		{
+			VkBufferImageCopy region{};
+			region.bufferOffset = 0;
+			region.bufferRowLength = 0;
+			region.bufferImageHeight = 0;
+
+			region.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+			region.imageSubresource.mipLevel = 0;
+			region.imageSubresource.baseArrayLayer = 0;
+			region.imageSubresource.layerCount = 1;
+
+			region.imageOffset = { 0,0,0 };
+			region.imageExtent = { width, height, 1 };
+
+			vkCmdCopyBufferToImage(commandBuffer, buffer, image,
+				VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
+		}
+		EndSingleTimeCommands(device, queue, commandPool, commandBuffer);
+	}
+
+	VkImageView CreateImageView(VkDevice device, VkImage image, VkFormat format)
+	{
+		VkImageViewCreateInfo createInfo{};
+		createInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+		createInfo.image = image;
+		createInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
+		createInfo.format = format;
+		createInfo.components.r = VK_COMPONENT_SWIZZLE_IDENTITY;
+		createInfo.components.g = VK_COMPONENT_SWIZZLE_IDENTITY;
+		createInfo.components.b = VK_COMPONENT_SWIZZLE_IDENTITY;
+		createInfo.components.a = VK_COMPONENT_SWIZZLE_IDENTITY;
+		createInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+		createInfo.subresourceRange.baseMipLevel = 0;
+		createInfo.subresourceRange.levelCount = 1;
+		createInfo.subresourceRange.baseArrayLayer = 0;
+		createInfo.subresourceRange.layerCount = 1;
+
+		VkImageView imageView;
+		VkResult result = vkCreateImageView(device, &createInfo, nullptr, &imageView);
+		Check(result == VK_SUCCESS, "Failed to create image view. Vulkan error: %d", result);
+
+		return imageView;
 	}
 #pragma endregion
 
@@ -265,6 +376,9 @@ namespace FGEngine
 
 		CreateFrameBuffers();
 		CreateCommandPool();
+		CreateTextureImage();
+		CreateTextureImageView();
+		CreateTextureSampler();
 		CreateVertexBuffer();
 		CreateIndexBuffer();
 		CreateUniformBuffer();
@@ -290,6 +404,11 @@ namespace FGEngine
 		vkDestroyCommandPool(logicalDevice, commandPool, nullptr);
 
 		CleanUpSwapChain();
+
+		vkDestroySampler(logicalDevice, textureSampler, nullptr);
+		vkDestroyImageView(logicalDevice, textureImageView, nullptr);
+		vkDestroyImage(logicalDevice, textureImage, nullptr);
+		vkFreeMemory(logicalDevice, textureImageMemory, nullptr);
 
 		VectorDestroy(vkDestroyBuffer, logicalDevice, uniformBuffers, nullptr);
 		VectorDestroy(vkFreeMemory, logicalDevice, uniformBuffersMemory, nullptr);
@@ -544,6 +663,7 @@ namespace FGEngine
 		}
 
 		VkPhysicalDeviceFeatures deviceFeatures{};
+		deviceFeatures.samplerAnisotropy = VK_TRUE;
 
 		VkDeviceCreateInfo  createInfo{};
 		createInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
@@ -655,23 +775,7 @@ namespace FGEngine
 
 		for (size_t i = 0; i < swapChainImages.size(); i++)
 		{
-			VkImageViewCreateInfo createInfo{};
-			createInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-			createInfo.image = swapChainImages[i];
-			createInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
-			createInfo.format = swapChainImageFormat;
-			createInfo.components.r = VK_COMPONENT_SWIZZLE_IDENTITY;
-			createInfo.components.g = VK_COMPONENT_SWIZZLE_IDENTITY;
-			createInfo.components.b = VK_COMPONENT_SWIZZLE_IDENTITY;
-			createInfo.components.a = VK_COMPONENT_SWIZZLE_IDENTITY;
-			createInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-			createInfo.subresourceRange.baseMipLevel = 0;
-			createInfo.subresourceRange.levelCount = 1;
-			createInfo.subresourceRange.baseArrayLayer = 0;
-			createInfo.subresourceRange.layerCount = 1;
-
-			VkResult result = vkCreateImageView(logicalDevice, &createInfo, nullptr, &swapChainImageViews[i]);
-			Check(result == VK_SUCCESS, "Failed to create swap chain image view %d. Vulkan error: %d", i, result);
+			swapChainImageViews[i] = CreateImageView(logicalDevice, swapChainImages[i], swapChainImageFormat);
 		}
 	}
 
@@ -727,10 +831,18 @@ namespace FGEngine
 		uboLayoutBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
 		uboLayoutBinding.pImmutableSamplers = nullptr;
 
+		VkDescriptorSetLayoutBinding samplerLayoutBinding{};
+		samplerLayoutBinding.binding = 1;
+		samplerLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+		samplerLayoutBinding.descriptorCount = 1;
+		samplerLayoutBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+		samplerLayoutBinding.pImmutableSamplers = nullptr;
+
+		std::array<VkDescriptorSetLayoutBinding, 2> bindings = { uboLayoutBinding, samplerLayoutBinding };
 		VkDescriptorSetLayoutCreateInfo layoutCreateInfo{};
 		layoutCreateInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-		layoutCreateInfo.bindingCount = 1;
-		layoutCreateInfo.pBindings = &uboLayoutBinding;
+		layoutCreateInfo.bindingCount = static_cast<uint32_t>(bindings.size());
+		layoutCreateInfo.pBindings = bindings.data();
 
 		VkResult result = vkCreateDescriptorSetLayout(logicalDevice, &layoutCreateInfo, nullptr, &descriptorSetLayout);
 		Check(result == VK_SUCCESS, "Failed to create descriptor set layout. Vulkan error: %d", result);
@@ -857,7 +969,7 @@ namespace FGEngine
 		pipelineCreateInfo.layout = pipelineLayout;
 		pipelineCreateInfo.renderPass = renderPass;
 		pipelineCreateInfo.subpass = 0;
-		pipelineCreateInfo.basePipelineHandle = nullptr;
+		pipelineCreateInfo.basePipelineHandle = VK_NULL_HANDLE;
 		pipelineCreateInfo.basePipelineIndex = -1;
 
 		result = vkCreateGraphicsPipelines(logicalDevice, VK_NULL_HANDLE, 1, &pipelineCreateInfo, nullptr, &graphicsPipeline);
@@ -903,6 +1015,116 @@ namespace FGEngine
 
 		VkResult result = vkCreateCommandPool(logicalDevice, &createInfo, nullptr, &commandPool);
 		Check(result == VK_SUCCESS, "Failed to create command pool. Vulkan error: %d", result);
+	}
+
+	void VulkanRendererAPI::CreateImage(uint32_t width, uint32_t height, VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage, VkMemoryPropertyFlags properties, VkImage& image, VkDeviceMemory& imageMemory)
+	{
+		VkImageCreateInfo imageCreateInfo{};
+		imageCreateInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+		imageCreateInfo.imageType = VK_IMAGE_TYPE_2D;
+		imageCreateInfo.extent.width = width;
+		imageCreateInfo.extent.height = height;
+		imageCreateInfo.extent.depth = 1;
+		imageCreateInfo.mipLevels = 1;
+		imageCreateInfo.arrayLayers = 1;
+		imageCreateInfo.format = format;
+		imageCreateInfo.tiling = tiling;
+		imageCreateInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+		imageCreateInfo.usage = usage;
+		imageCreateInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+		imageCreateInfo.samples = VK_SAMPLE_COUNT_1_BIT;
+		imageCreateInfo.flags = 0;
+
+		VkResult result = vkCreateImage(logicalDevice, &imageCreateInfo, nullptr, &image);
+		Check(result == VK_SUCCESS, "Failed to create image. Vulkan error: %d", result);
+
+		VkMemoryRequirements memoryRequirements;
+		vkGetImageMemoryRequirements(logicalDevice, image, &memoryRequirements);
+
+		VkMemoryAllocateInfo memoryAllocateInfo{};
+		memoryAllocateInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+		memoryAllocateInfo.allocationSize = memoryRequirements.size;
+		memoryAllocateInfo.memoryTypeIndex = FindMemoryType(physicalDevice,
+			memoryRequirements.memoryTypeBits,
+			properties);
+
+		result = vkAllocateMemory(logicalDevice, &memoryAllocateInfo, nullptr, &imageMemory);
+		Check(result == VK_SUCCESS, "Failed to allocate image memory. Vulkan error: %d", result);
+
+		vkBindImageMemory(logicalDevice, image, imageMemory, 0);
+	}
+
+	void VulkanRendererAPI::CreateTextureImage()
+	{
+		Texture texture = Texture("texture/texture.jpg");
+		VkDeviceSize imageSize = texture.GetWidth() * texture.GetHeight() * 4;
+
+		VkBuffer stagingBuffer;
+		VkDeviceMemory stagingBufferMemory;
+
+		CreateBuffer(imageSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+			VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+			stagingBuffer, stagingBufferMemory);
+
+		void* data;
+		vkMapMemory(logicalDevice, stagingBufferMemory, 0, imageSize, 0, &data);
+		{
+			memcpy(data, texture.Data(), static_cast<size_t>(imageSize));
+		}
+		vkUnmapMemory(logicalDevice, stagingBufferMemory);
+
+		CreateImage(texture.GetWidth(), texture.GetHeight(),
+			VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_TILING_OPTIMAL,
+			VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+			VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+			textureImage, textureImageMemory);
+
+		TransitionImageLayout(logicalDevice, commandPool, graphicsQueue,
+			textureImage, VK_FORMAT_R8G8B8A8_SRGB,
+			VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+
+		CopyBufferToImage(logicalDevice, commandPool, graphicsQueue,
+			stagingBuffer, textureImage,
+			texture.GetWidth(), texture.GetHeight());
+
+		TransitionImageLayout(logicalDevice, commandPool, graphicsQueue,
+			textureImage, VK_FORMAT_R8G8B8A8_SRGB,
+			VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+
+		vkDestroyBuffer(logicalDevice, stagingBuffer, nullptr);
+		vkFreeMemory(logicalDevice, stagingBufferMemory, nullptr);
+	}
+
+	void VulkanRendererAPI::CreateTextureImageView()
+	{
+		textureImageView = CreateImageView(logicalDevice, textureImage, VK_FORMAT_R8G8B8A8_SRGB);
+	}
+
+	void VulkanRendererAPI::CreateTextureSampler()
+	{
+		VkPhysicalDeviceProperties properties{};
+		vkGetPhysicalDeviceProperties(physicalDevice, &properties);
+
+		VkSamplerCreateInfo samplerCreateInfo{};
+		samplerCreateInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
+		samplerCreateInfo.magFilter = VK_FILTER_LINEAR;
+		samplerCreateInfo.minFilter = VK_FILTER_LINEAR;
+		samplerCreateInfo.addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+		samplerCreateInfo.addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+		samplerCreateInfo.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+		samplerCreateInfo.anisotropyEnable = VK_TRUE;
+		samplerCreateInfo.maxAnisotropy = properties.limits.maxSamplerAnisotropy;
+		samplerCreateInfo.borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK;
+		samplerCreateInfo.unnormalizedCoordinates = VK_FALSE;
+		samplerCreateInfo.compareEnable = VK_FALSE;
+		samplerCreateInfo.compareOp = VK_COMPARE_OP_ALWAYS;
+		samplerCreateInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
+		samplerCreateInfo.mipLodBias = 0.0f;
+		samplerCreateInfo.minLod = 0.0f;
+		samplerCreateInfo.maxLod = 0.0f;
+
+		VkResult result = vkCreateSampler(logicalDevice, &samplerCreateInfo, nullptr, &textureSampler);
+		Check(result == VK_SUCCESS, "Failed to create texture sampler. Vulkan error: %d", result);
 	}
 
 	void VulkanRendererAPI::CreateBuffer(
@@ -1016,14 +1238,16 @@ namespace FGEngine
 
 	void VulkanRendererAPI::CreateDescriptorPool()
 	{
-		VkDescriptorPoolSize poolSize{};
-		poolSize.type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-		poolSize.descriptorCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT);
+		std::array<VkDescriptorPoolSize, 2> poolSizes{};
+		poolSizes[0].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+		poolSizes[0].descriptorCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT);
+		poolSizes[1].type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+		poolSizes[1].descriptorCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT);
 
 		VkDescriptorPoolCreateInfo createInfo{};
 		createInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
-		createInfo.poolSizeCount = 1;
-		createInfo.pPoolSizes = &poolSize;
+		createInfo.poolSizeCount = static_cast<uint32_t>(poolSizes.size());
+		createInfo.pPoolSizes = poolSizes.data();
 		createInfo.maxSets = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT);
 
 		VkResult result = vkCreateDescriptorPool(logicalDevice, &createInfo, nullptr, &descriptorPool);
@@ -1051,18 +1275,32 @@ namespace FGEngine
 			bufferInfo.offset = 0;
 			bufferInfo.range = sizeof(UniformBufferObject);
 
-			VkWriteDescriptorSet writeDescriptorSet{};
-			writeDescriptorSet.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-			writeDescriptorSet.dstSet = descriptorSets[i];
-			writeDescriptorSet.dstBinding = 0;
-			writeDescriptorSet.dstArrayElement = 0;
-			writeDescriptorSet.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-			writeDescriptorSet.descriptorCount = 1;
-			writeDescriptorSet.pBufferInfo = &bufferInfo;
-			writeDescriptorSet.pImageInfo = nullptr;
-			writeDescriptorSet.pTexelBufferView = nullptr;
+			VkDescriptorImageInfo imageInfo{};
+			imageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+			imageInfo.imageView = textureImageView;
+			imageInfo.sampler = textureSampler;
 
-			vkUpdateDescriptorSets(logicalDevice, 1, &writeDescriptorSet, 0, nullptr);
+			std::array<VkWriteDescriptorSet, 2> writeDescriptorSets{};
+			writeDescriptorSets[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+			writeDescriptorSets[0].dstSet = descriptorSets[i];
+			writeDescriptorSets[0].dstBinding = 0;
+			writeDescriptorSets[0].dstArrayElement = 0;
+			writeDescriptorSets[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+			writeDescriptorSets[0].descriptorCount = 1;
+			writeDescriptorSets[0].pBufferInfo = &bufferInfo;
+
+			writeDescriptorSets[1].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+			writeDescriptorSets[1].dstSet = descriptorSets[i];
+			writeDescriptorSets[1].dstBinding = 1;
+			writeDescriptorSets[1].dstArrayElement = 0;
+			writeDescriptorSets[1].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+			writeDescriptorSets[1].descriptorCount = 1;
+			writeDescriptorSets[1].pImageInfo = &imageInfo;
+
+			vkUpdateDescriptorSets(logicalDevice,
+				static_cast<uint32_t>(writeDescriptorSets.size()),
+				writeDescriptorSets.data(),
+				0, nullptr);
 		}
 	}
 
@@ -1271,7 +1509,13 @@ namespace FGEngine
 			bSwapChainAdequate = !supportDetails.surfaceFormats.empty() && !supportDetails.presentModes.empty();
 		}
 
-		return queueFamilyIndices.IsComplete() && bExtensionSupported && bSwapChainAdequate;
+		VkPhysicalDeviceFeatures supportedFeatures;
+		vkGetPhysicalDeviceFeatures(physicalDevice, &supportedFeatures);
+
+		return queueFamilyIndices.IsComplete()
+			&& bExtensionSupported
+			&& bSwapChainAdequate
+			&& supportedFeatures.samplerAnisotropy;
 	}
 #pragma endregion
 
