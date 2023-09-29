@@ -60,7 +60,7 @@ namespace FGEngine
 
 		Renderer::Init(RendererProperties(rendererAPI, nativeWindow));
 		//Renderer::SetClearColor(1, 0, 1, 1);
-		Renderer::SetClearColor(0, 0, 0, 1);
+		Renderer::SetClearColor(0.02f, 0.02f, 0.02f, 1);
 
 		glfwSetWindowSizeCallback(nativeWindow, [](GLFWwindow* glWindow, int width, int height)
 			{
