@@ -2,6 +2,7 @@
 #include "platform/vulkan/VulkanRendererAPI.h"
 #include "core/Logger.h"
 #include "renderer/Texture.h"
+#include "renderer/Model.h"
 
 #include <algorithm>
 #include <fstream>
@@ -421,6 +422,7 @@ namespace FGEngine
 		CreateTextureImage();
 		CreateTextureImageView();
 		CreateTextureSampler();
+		LoadModel();
 		CreateVertexBuffer();
 		CreateIndexBuffer();
 		CreateUniformBuffer();
@@ -442,6 +444,12 @@ namespace FGEngine
 		vkFreeMemory(logicalDevice, indexBufferMemory, nullptr);
 		vkDestroyBuffer(logicalDevice, vertexBuffer, nullptr);
 		vkFreeMemory(logicalDevice, vertexBufferMemory, nullptr);
+
+		if (model)
+		{
+			delete model;
+			model = nullptr;
+		}
 
 		vkDestroyCommandPool(logicalDevice, commandPool, nullptr);
 
@@ -934,8 +942,8 @@ namespace FGEngine
 			fragCreateInfo
 		};
 
-		auto bindingDescription = Vertex::GetBindingDescription();
-		auto attributeDescription = Vertex::GetAttributeDescriptions();
+		auto bindingDescription = VertexHelper::GetBindingDescription();
+		auto attributeDescription = VertexHelper::GetAttributeDescriptions();
 
 		VkPipelineVertexInputStateCreateInfo vertexInputCreateInfo{};
 		vertexInputCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
@@ -1141,7 +1149,8 @@ namespace FGEngine
 
 	void VulkanRendererAPI::CreateTextureImage()
 	{
-		Texture texture = Texture("texture/texture.jpg");
+		//Texture texture = Texture("texture/texture.jpg");
+		Texture texture = Texture("model/viking_room/viking_room.png");
 		VkDeviceSize imageSize = texture.GetWidth() * texture.GetHeight() * 4;
 
 		VkBuffer stagingBuffer;
@@ -1212,6 +1221,12 @@ namespace FGEngine
 		Check(result == VK_SUCCESS, "Failed to create texture sampler. Vulkan error: %d", result);
 	}
 
+	void VulkanRendererAPI::LoadModel()
+	{
+		//model = Model::GenerateQuad();
+		model = new Model("model/viking_room/viking_room.obj");
+	}
+
 	void VulkanRendererAPI::CreateBuffer(
 		VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties,
 		VkBuffer& buffer, VkDeviceMemory& bufferMemory)
@@ -1244,6 +1259,7 @@ namespace FGEngine
 
 	void VulkanRendererAPI::CreateVertexBuffer()
 	{
+		std::vector<Vertex> vertices = model->GetMesh(0)->GetVertices();
 		VkDeviceSize bufferSize = sizeof(vertices[0]) * vertices.size();
 
 		VkBuffer stagingBuffer;
@@ -1274,6 +1290,7 @@ namespace FGEngine
 
 	void VulkanRendererAPI::CreateIndexBuffer()
 	{
+		std::vector<uint32_t> indices = model->GetMesh(0)->GetIndices();
 		VkDeviceSize bufferSize = sizeof(indices[0]) * indices.size();
 
 		VkBuffer stagingBuffer;
@@ -1522,14 +1539,14 @@ namespace FGEngine
 			VkDeviceSize offsets[] = { 0 };
 			vkCmdBindVertexBuffers(commandBuffer, 0, 1, &vertexBuffer, offsets);
 
-			vkCmdBindIndexBuffer(commandBuffer, indexBuffer, 0, VK_INDEX_TYPE_UINT16);
+			vkCmdBindIndexBuffer(commandBuffer, indexBuffer, 0, VK_INDEX_TYPE_UINT32);
 
 			vkCmdBindDescriptorSets(commandBuffer,
 				VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0,
 				1, &descriptorSets[currentFrame],
 				0, nullptr);
 
-			vkCmdDrawIndexed(commandBuffer, static_cast<uint32_t>(indices.size()), 1, 0, 0, 0);
+			vkCmdDrawIndexed(commandBuffer, static_cast<uint32_t>(model->GetMesh(0)->GetIndices().size()), 1, 0, 0, 0);
 		}
 		vkCmdEndRenderPass(commandBuffer);
 

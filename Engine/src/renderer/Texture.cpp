@@ -9,6 +9,7 @@ namespace FGEngine
 {
 	Texture::Texture(const std::string& path)
 	{
+		stbi_set_flip_vertically_on_load(true);
 		texturePtr = stbi_load(path.c_str(), &width, &height, &channelCount, STBI_rgb_alpha);
 		Check(texturePtr, "failed to load texture from %s", path.c_str());
 	}

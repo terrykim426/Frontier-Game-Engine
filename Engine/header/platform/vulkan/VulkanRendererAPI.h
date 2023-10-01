@@ -1,6 +1,7 @@
 #pragma once
 
 #include "renderer/RendererAPI.h"
+#include "renderer/Vertex.h"
 
 #include <vector>
 #include <optional>
@@ -53,6 +54,7 @@ namespace FGEngine
 		void CreateTextureImage();
 		void CreateTextureImageView();
 		void CreateTextureSampler();
+		void LoadModel();
 		void CreateBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkBuffer& buffer, VkDeviceMemory& bufferMemory);
 		void CreateVertexBuffer();
 		void CreateIndexBuffer();
@@ -142,12 +144,8 @@ namespace FGEngine
 		// TODO: To move to it own class
 #pragma region Vertex Buffer
 	private:
-		struct Vertex
+		struct VertexHelper
 		{
-			glm::vec3 pos;
-			glm::vec3 color;
-			glm::vec2 texCoord;
-
 			static VkVertexInputBindingDescription GetBindingDescription()
 			{
 				VkVertexInputBindingDescription bindingDescription{};
@@ -180,23 +178,7 @@ namespace FGEngine
 			}
 		};
 
-		const std::vector<Vertex> vertices =
-		{
-			{{-0.5f, -0.5f, 0.0f}, {1.0f, 0.0f, 0.0f}, {1.0f, 0.0f}},
-			{{0.5f, -0.5f, 0.0f}, {0.0f, 1.0f, 0.0f}, {0.0f, 0.0f}},
-			{{0.5f, 0.5f, 0.0f}, {0.0f, 0.0f, 1.0f}, {0.0f, 1.0f}},
-			{{-0.5f, 0.5f, 0.0f}, {1.0f, 1.0f, 1.0f}, {1.0f, 1.0f}},
-
-			{{ -0.5f, -0.5f, -0.5f}, {1.0f, 0.0f, 0.0f}, {1.0f, 0.0f}},
-			{{0.5f, -0.5f, -0.5f}, {0.0f, 1.0f, 0.0f}, {0.0f, 0.0f}},
-			{{0.5f, 0.5f, -0.5f}, {0.0f, 0.0f, 1.0f}, {0.0f, 1.0f}},
-			{{-0.5f, 0.5f, -0.5f}, {1.0f, 1.0f, 1.0f}, {1.0f, 1.0f}}
-		};
-
-		const std::vector<uint16_t> indices = {
-			0, 1, 2, 2, 3, 0,
-			4, 5, 6, 6, 7, 4
-		};
+		class Model* model = nullptr;
 #pragma endregion
 
 #pragma region Descriptor
