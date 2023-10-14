@@ -49,7 +49,7 @@ namespace FGEngine
 		void CreateGraphicsPipeline();
 		void CreateFrameBuffers();
 		void CreateCommandPool();
-		void CreateImage(uint32_t width, uint32_t height, VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage, VkMemoryPropertyFlags properties, VkImage& image, VkDeviceMemory& imageMemory);
+		void CreateImage(uint32_t width, uint32_t height, uint32_t mipLevels, VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage, VkMemoryPropertyFlags properties, VkImage& image, VkDeviceMemory& imageMemory);
 		void CreateDepthResources();
 		void CreateTextureImage();
 		void CreateTextureImageView();
@@ -112,6 +112,7 @@ namespace FGEngine
 		std::vector<VkSemaphore> renderFinishedSemaphores;
 		std::vector<VkFence> inFlightFences;
 
+		uint32_t mipLevels;
 		VkImage textureImage;
 		VkDeviceMemory textureImageMemory;
 		VkImageView textureImageView;

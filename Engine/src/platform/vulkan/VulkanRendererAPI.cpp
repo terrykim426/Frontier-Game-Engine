@@ -300,7 +300,7 @@ namespace FGEngine
 		EndSingleTimeCommands(device, queue, commandPool, commandBuffer);
 	}
 
-	static void TransitionImageLayout(VkDevice device, VkCommandPool commandPool, VkQueue queue, VkImage image, VkFormat format, VkImageLayout oldLayout, VkImageLayout newLayout)
+	static void TransitionImageLayout(VkDevice device, VkCommandPool commandPool, VkQueue queue, VkImage image, VkFormat format, VkImageLayout oldLayout, VkImageLayout newLayout, uint32_t mipLevels)
 	{
 		VkCommandBuffer commandBuffer = BeginSingleTimeCommands(device, commandPool);
 		{
@@ -313,7 +313,7 @@ namespace FGEngine
 			barrier.image = image;
 			barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
 			barrier.subresourceRange.baseMipLevel = 0;
-			barrier.subresourceRange.levelCount = 1;
+			barrier.subresourceRange.levelCount = mipLevels;
 			barrier.subresourceRange.baseArrayLayer = 0;
 			barrier.subresourceRange.layerCount = 1;
 
@@ -374,7 +374,7 @@ namespace FGEngine
 		EndSingleTimeCommands(device, queue, commandPool, commandBuffer);
 	}
 
-	VkImageView CreateImageView(VkDevice device, VkImage image, VkFormat format, VkImageAspectFlags aspectFlags)
+	VkImageView CreateImageView(VkDevice device, VkImage image, VkFormat format, VkImageAspectFlags aspectFlags, uint32_t mipLevels)
 	{
 		VkImageViewCreateInfo createInfo{};
 		createInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
@@ -387,7 +387,7 @@ namespace FGEngine
 		createInfo.components.a = VK_COMPONENT_SWIZZLE_IDENTITY;
 		createInfo.subresourceRange.aspectMask = aspectFlags;
 		createInfo.subresourceRange.baseMipLevel = 0;
-		createInfo.subresourceRange.levelCount = 1;
+		createInfo.subresourceRange.levelCount = mipLevels;
 		createInfo.subresourceRange.baseArrayLayer = 0;
 		createInfo.subresourceRange.layerCount = 1;
 
@@ -396,6 +396,97 @@ namespace FGEngine
 		Check(result == VK_SUCCESS, "Failed to create image view. Vulkan error: %d", result);
 
 		return imageView;
+	}
+
+	void GenerateMipmaps(VkPhysicalDevice physicalDevice, VkDevice device, VkQueue graphicsQueue, VkCommandPool commandPool, VkImage image, VkFormat imageFormat, int32_t textureWidth, int32_t textureHeight, uint32_t mipLevels)
+	{
+		VkFormatProperties formatProperties;
+		vkGetPhysicalDeviceFormatProperties(physicalDevice, imageFormat, &formatProperties);
+
+		Check(formatProperties.optimalTilingFeatures & VK_FORMAT_FEATURE_SAMPLED_IMAGE_FILTER_LINEAR_BIT, "Texture image format does not support linear blitting!");
+
+		VkCommandBuffer commandBuffer = BeginSingleTimeCommands(device, commandPool);
+
+		VkImageMemoryBarrier barrier{};
+		barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+		barrier.image = image;
+		barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+		barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+		barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+		barrier.subresourceRange.baseArrayLayer = 0;
+		barrier.subresourceRange.layerCount = 1;
+		barrier.subresourceRange.levelCount = 1;
+
+		int32_t mipWidth = textureWidth;
+		int32_t mipHeight = textureHeight;
+
+		for (uint32_t i = 1; i < mipLevels; i++)
+		{
+			barrier.subresourceRange.baseMipLevel = i - 1;
+			barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+			barrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+			barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+			barrier.dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
+
+			vkCmdPipelineBarrier(commandBuffer,
+				VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 0,
+				0, nullptr,
+				0, nullptr,
+				1, &barrier);
+
+			VkImageBlit blit{};
+			blit.srcOffsets[0] = { 0,0,0 };
+			blit.srcOffsets[1] = { mipWidth,mipHeight,1 };
+			blit.srcSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+			blit.srcSubresource.mipLevel = i - 1;
+			blit.srcSubresource.baseArrayLayer = 0;
+			blit.srcSubresource.layerCount = 1;
+			blit.dstOffsets[0] = { 0,0,0 };
+			blit.dstOffsets[1] =
+			{
+				mipWidth > 1 ? mipWidth / 2 : 1,
+				mipHeight > 1 ? mipHeight / 2 : 1,
+				1
+			};
+			blit.dstSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+			blit.dstSubresource.mipLevel = i;
+			blit.dstSubresource.baseArrayLayer = 0;
+			blit.dstSubresource.layerCount = 1;
+
+			vkCmdBlitImage(commandBuffer,
+				image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+				image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+				1, &blit,
+				VK_FILTER_LINEAR);
+
+			barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+			barrier.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+			barrier.srcAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
+			barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+
+			vkCmdPipelineBarrier(commandBuffer,
+				VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, 0,
+				0, nullptr,
+				0, nullptr,
+				1, &barrier);
+
+			if (mipWidth > 1) mipWidth /= 2;
+			if (mipHeight > 1) mipHeight /= 2;
+		}
+
+		barrier.subresourceRange.baseMipLevel = mipLevels - 1;
+		barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+		barrier.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+		barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+		barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+
+		vkCmdPipelineBarrier(commandBuffer,
+			VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, 0,
+			0, nullptr,
+			0, nullptr,
+			1, &barrier);
+
+		EndSingleTimeCommands(device, graphicsQueue, commandPool, commandBuffer);
 	}
 #pragma endregion
 
@@ -826,7 +917,7 @@ namespace FGEngine
 
 		for (size_t i = 0; i < swapChainImages.size(); i++)
 		{
-			swapChainImageViews[i] = CreateImageView(logicalDevice, swapChainImages[i], swapChainImageFormat, VK_IMAGE_ASPECT_COLOR_BIT);
+			swapChainImageViews[i] = CreateImageView(logicalDevice, swapChainImages[i], swapChainImageFormat, VK_IMAGE_ASPECT_COLOR_BIT, 1);
 		}
 	}
 
@@ -1098,7 +1189,7 @@ namespace FGEngine
 		Check(result == VK_SUCCESS, "Failed to create command pool. Vulkan error: %d", result);
 	}
 
-	void VulkanRendererAPI::CreateImage(uint32_t width, uint32_t height, VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage, VkMemoryPropertyFlags properties, VkImage& image, VkDeviceMemory& imageMemory)
+	void VulkanRendererAPI::CreateImage(uint32_t width, uint32_t height, uint32_t mipLevels, VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage, VkMemoryPropertyFlags properties, VkImage& image, VkDeviceMemory& imageMemory)
 	{
 		VkImageCreateInfo imageCreateInfo{};
 		imageCreateInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
@@ -1106,7 +1197,7 @@ namespace FGEngine
 		imageCreateInfo.extent.width = width;
 		imageCreateInfo.extent.height = height;
 		imageCreateInfo.extent.depth = 1;
-		imageCreateInfo.mipLevels = 1;
+		imageCreateInfo.mipLevels = mipLevels;
 		imageCreateInfo.arrayLayers = 1;
 		imageCreateInfo.format = format;
 		imageCreateInfo.tiling = tiling;
@@ -1138,13 +1229,13 @@ namespace FGEngine
 	void VulkanRendererAPI::CreateDepthResources()
 	{
 		VkFormat depthFormat = FindDepthFormat(physicalDevice);
-		CreateImage(swapChainExtent.width, swapChainExtent.height,
+		CreateImage(swapChainExtent.width, swapChainExtent.height, 1,
 			depthFormat, VK_IMAGE_TILING_OPTIMAL,
 			VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
 			VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
 			depthImage, depthImageMemory);
 
-		depthImageView = CreateImageView(logicalDevice, depthImage, depthFormat, VK_IMAGE_ASPECT_DEPTH_BIT);
+		depthImageView = CreateImageView(logicalDevice, depthImage, depthFormat, VK_IMAGE_ASPECT_DEPTH_BIT, 1);
 	}
 
 	void VulkanRendererAPI::CreateTextureImage()
@@ -1152,6 +1243,7 @@ namespace FGEngine
 		//Texture texture = Texture("texture/texture.jpg");
 		Texture texture = Texture("model/viking_room/viking_room.png");
 		VkDeviceSize imageSize = texture.GetWidth() * texture.GetHeight() * 4;
+		mipLevels = static_cast<uint32_t>(std::floor(std::log2(std::max(texture.GetWidth(), texture.GetHeight())))) + 1;
 
 		VkBuffer stagingBuffer;
 		VkDeviceMemory stagingBufferMemory;
@@ -1167,31 +1259,33 @@ namespace FGEngine
 		}
 		vkUnmapMemory(logicalDevice, stagingBufferMemory);
 
-		CreateImage(texture.GetWidth(), texture.GetHeight(),
+		CreateImage(texture.GetWidth(), texture.GetHeight(), mipLevels,
 			VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_TILING_OPTIMAL,
-			VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+			VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
 			VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
 			textureImage, textureImageMemory);
 
 		TransitionImageLayout(logicalDevice, commandPool, graphicsQueue,
 			textureImage, VK_FORMAT_R8G8B8A8_SRGB,
-			VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+			VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, mipLevels);
 
 		CopyBufferToImage(logicalDevice, commandPool, graphicsQueue,
 			stagingBuffer, textureImage,
 			texture.GetWidth(), texture.GetHeight());
 
-		TransitionImageLayout(logicalDevice, commandPool, graphicsQueue,
+		/*TransitionImageLayout(logicalDevice, commandPool, graphicsQueue,
 			textureImage, VK_FORMAT_R8G8B8A8_SRGB,
-			VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+			VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, mipLevels);*/
 
 		vkDestroyBuffer(logicalDevice, stagingBuffer, nullptr);
 		vkFreeMemory(logicalDevice, stagingBufferMemory, nullptr);
+
+		GenerateMipmaps(physicalDevice, logicalDevice, graphicsQueue, commandPool, textureImage, VK_FORMAT_R8G8B8A8_SRGB, texture.GetWidth(), texture.GetHeight(), mipLevels);
 	}
 
 	void VulkanRendererAPI::CreateTextureImageView()
 	{
-		textureImageView = CreateImageView(logicalDevice, textureImage, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_ASPECT_COLOR_BIT);
+		textureImageView = CreateImageView(logicalDevice, textureImage, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_ASPECT_COLOR_BIT, mipLevels);
 	}
 
 	void VulkanRendererAPI::CreateTextureSampler()
@@ -1215,7 +1309,7 @@ namespace FGEngine
 		samplerCreateInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
 		samplerCreateInfo.mipLodBias = 0.0f;
 		samplerCreateInfo.minLod = 0.0f;
-		samplerCreateInfo.maxLod = 0.0f;
+		samplerCreateInfo.maxLod = static_cast<float>(mipLevels);
 
 		VkResult result = vkCreateSampler(logicalDevice, &samplerCreateInfo, nullptr, &textureSampler);
 		Check(result == VK_SUCCESS, "Failed to create texture sampler. Vulkan error: %d", result);
