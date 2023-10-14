@@ -49,7 +49,8 @@ namespace FGEngine
 		void CreateGraphicsPipeline();
 		void CreateFrameBuffers();
 		void CreateCommandPool();
-		void CreateImage(uint32_t width, uint32_t height, uint32_t mipLevels, VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage, VkMemoryPropertyFlags properties, VkImage& image, VkDeviceMemory& imageMemory);
+		void CreateImage(uint32_t width, uint32_t height, uint32_t mipLevels, VkSampleCountFlagBits numSamples, VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage, VkMemoryPropertyFlags properties, VkImage& image, VkDeviceMemory& imageMemory);
+		void CreateColorResources();
 		void CreateDepthResources();
 		void CreateTextureImage();
 		void CreateTextureImageView();
@@ -118,9 +119,15 @@ namespace FGEngine
 		VkImageView textureImageView;
 		VkSampler textureSampler;
 
+		VkImage colorImage;
+		VkDeviceMemory colorImageMemory;
+		VkImageView colorImageView;
+
 		VkImage depthImage;
 		VkDeviceMemory depthImageMemory;
 		VkImageView depthImageView;
+
+		VkSampleCountFlagBits msaaSamples = VK_SAMPLE_COUNT_1_BIT;
 
 		uint32_t currentFrame = 0;
 		bool bResizeRequested = false;
