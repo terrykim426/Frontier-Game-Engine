@@ -93,6 +93,9 @@
     <ClInclude Include="header\platform\vulkan\VulkanInstance.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="header\platform\vulkan\VulkanDefineType.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="dllmain.cpp">

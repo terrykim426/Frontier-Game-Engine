@@ -1,6 +1,8 @@
 #include "pch.h"
 #include "platform/vulkan/VulkanRendererAPI.h"
+#include "platform/vulkan/VulkanDefineType.h"
 #include "platform/vulkan/VulkanInstance.h"
+#include "platform/vulkan/VulkanPhysicalDevice.h"
 
 #include "core/Logger.h"
 #include "renderer/Texture.h"
@@ -19,88 +21,7 @@
 
 namespace FGEngine
 {
-#pragma region Queue Family
-	struct QueueFamilyIndices
-	{
-		std::optional<uint32_t> graphicsFamily;
-		std::optional<uint32_t> presentFamily;
-
-		bool IsComplete()
-		{
-			return graphicsFamily.has_value()
-				&& presentFamily.has_value();
-		}
-	};
-
-	static QueueFamilyIndices FindQueueFamilies(VkPhysicalDevice device, VkSurfaceKHR surface)
-	{
-		QueueFamilyIndices queueFamilyIndices;
-
-		uint32_t queueFamilyCount;
-		vkGetPhysicalDeviceQueueFamilyProperties(device, &queueFamilyCount, nullptr);
-
-		std::vector<VkQueueFamilyProperties> properties(queueFamilyCount);
-		vkGetPhysicalDeviceQueueFamilyProperties(device, &queueFamilyCount, properties.data());
-
-		int i = 0;
-		for (const VkQueueFamilyProperties& property : properties)
-		{
-			if (property.queueFlags & VK_QUEUE_GRAPHICS_BIT)
-			{
-				queueFamilyIndices.graphicsFamily = i;
-			}
-
-			VkBool32 bHasPresentSupport;
-			vkGetPhysicalDeviceSurfaceSupportKHR(device, i, surface, &bHasPresentSupport);
-			if (bHasPresentSupport)
-			{
-				queueFamilyIndices.presentFamily = i;
-			}
-
-			if (queueFamilyIndices.IsComplete())
-			{
-				break;
-			}
-			i++;
-		}
-
-		return queueFamilyIndices;
-	}
-#pragma endregion
-
 #pragma region Swap Chain Support Details
-	struct SwapChainSupportDetails
-	{
-		VkSurfaceCapabilitiesKHR capabilities;
-		std::vector<VkSurfaceFormatKHR> surfaceFormats;
-		std::vector<VkPresentModeKHR> presentModes;
-	};
-
-	static SwapChainSupportDetails QuerySwapChainSupport(VkPhysicalDevice device, VkSurfaceKHR surface)
-	{
-		SwapChainSupportDetails supportDetails;
-
-		vkGetPhysicalDeviceSurfaceCapabilitiesKHR(device, surface, &supportDetails.capabilities);
-
-		uint32_t formatCount;
-		vkGetPhysicalDeviceSurfaceFormatsKHR(device, surface, &formatCount, nullptr);
-		if (formatCount != 0)
-		{
-			supportDetails.surfaceFormats.resize(formatCount);
-			vkGetPhysicalDeviceSurfaceFormatsKHR(device, surface, &formatCount, supportDetails.surfaceFormats.data());
-		}
-
-		uint32_t modeCount;
-		vkGetPhysicalDeviceSurfacePresentModesKHR(device, surface, &modeCount, nullptr);
-		if (modeCount != 0)
-		{
-			supportDetails.presentModes.resize(modeCount);
-			vkGetPhysicalDeviceSurfacePresentModesKHR(device, surface, &formatCount, supportDetails.presentModes.data());
-		}
-
-		return supportDetails;
-	}
-
 	static VkSurfaceFormatKHR ChooseSwapSurfaceFormat(const std::vector<VkSurfaceFormatKHR>& availableSurfaceFormats)
 	{
 		Check(availableSurfaceFormats.size() > 0, "No surface format available!");
@@ -490,25 +411,6 @@ namespace FGEngine
 
 		EndSingleTimeCommands(device, graphicsQueue, commandPool, commandBuffer);
 	}
-
-	VkSampleCountFlagBits GetMaxUsableSampleCount(VkPhysicalDevice physicalDevice)
-	{
-		VkPhysicalDeviceProperties physicalDeviceProperties;
-		vkGetPhysicalDeviceProperties(physicalDevice, &physicalDeviceProperties);
-
-		VkSampleCountFlags counts =
-			physicalDeviceProperties.limits.framebufferColorSampleCounts &
-			physicalDeviceProperties.limits.framebufferDepthSampleCounts;
-
-		if (counts & VK_SAMPLE_COUNT_64_BIT) return VK_SAMPLE_COUNT_64_BIT;
-		if (counts & VK_SAMPLE_COUNT_32_BIT) return VK_SAMPLE_COUNT_32_BIT;
-		if (counts & VK_SAMPLE_COUNT_16_BIT) return VK_SAMPLE_COUNT_16_BIT;
-		if (counts & VK_SAMPLE_COUNT_8_BIT) return VK_SAMPLE_COUNT_8_BIT;
-		if (counts & VK_SAMPLE_COUNT_4_BIT) return VK_SAMPLE_COUNT_4_BIT;
-		if (counts & VK_SAMPLE_COUNT_2_BIT) return VK_SAMPLE_COUNT_2_BIT;
-
-		return VK_SAMPLE_COUNT_1_BIT;
-	}
 #pragma endregion
 
 #pragma region VulkanRendererAPI
@@ -524,8 +426,9 @@ namespace FGEngine
 			"Frontier Game Engine"				// TODO: hardcode this at the header file?
 			});
 
+		physicalDevice = new VulkanPhysicalDevice(vulkanInstance, deviceExtensions);
+		msaaSamples = physicalDevice->GetMaxSampleCount();
 
-		PickPhysicalDevice();
 		CreateLogicalDevice();
 		CreateSwapChain();
 		CreateImageViews();
@@ -694,77 +597,9 @@ namespace FGEngine
 		return glfwVulkanSupported();
 	}
 
-	void VulkanRendererAPI::PickPhysicalDevice()
-	{
-		uint32_t deviceCount = 0;
-		vkEnumeratePhysicalDevices(*vulkanInstance, &deviceCount, nullptr);
-
-		Check(deviceCount > 0, "No vulkan-supported GPU is found!");
-
-		std::vector<VkPhysicalDevice> devices(deviceCount);
-		vkEnumeratePhysicalDevices(*vulkanInstance, &deviceCount, devices.data());
-
-		if (devices.size() == 1)
-		{
-			physicalDevice = devices[0];
-		}
-		else if (devices.size() > 1)
-		{
-			// sort by scoring the supported properties and features
-			auto DeviceScore = [this](VkPhysicalDevice device)
-			{
-				if (!IsDeviceSuitable(device))
-				{
-					return -1;
-				}
-
-				int score = 0;
-				VkPhysicalDeviceProperties properties;
-				VkPhysicalDeviceFeatures features;
-				vkGetPhysicalDeviceProperties(device, &properties);
-				vkGetPhysicalDeviceFeatures(device, &features);
-
-				// discrete gpu has performance advantage
-				if (properties.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU)
-				{
-					score += 1000;
-				}
-
-				// maximum possible size of textures affects graphics quality
-				score += properties.limits.maxImageDimension2D;
-
-				/* uncomment this if geometry shader support is required
-				if (!features.geometryShader)
-				{
-					score = 0;
-				}
-				*/
-
-				return score;
-			};
-
-			std::sort(devices.begin(), devices.end(),
-				[&](auto A, auto B)
-				{
-					return DeviceScore(A) > DeviceScore(B);
-				});
-
-			physicalDevice = devices[0];
-		}
-
-		Check(physicalDevice != VK_NULL_HANDLE, "Failed to find suitable GPU!");
-
-
-		VkPhysicalDeviceProperties properties;
-		vkGetPhysicalDeviceProperties(physicalDevice, &properties);
-		LogInfo("Device Name: %s", properties.deviceName);
-
-		msaaSamples = GetMaxUsableSampleCount(physicalDevice);
-	}
-
 	void VulkanRendererAPI::CreateLogicalDevice()
 	{
-		QueueFamilyIndices queueFamilyIndices = FindQueueFamilies(physicalDevice, vulkanInstance->GetSurface());
+		QueueFamilyIndices queueFamilyIndices = physicalDevice->GetQueueFamilyIndices();
 
 		std::vector<VkDeviceQueueCreateInfo> queueCreateInfos;
 		std::set<uint32_t> uniqueQueueFamilyIndices
@@ -805,7 +640,7 @@ namespace FGEngine
 			createInfo.enabledLayerCount = 0;
 		}
 
-		VkResult result = vkCreateDevice(physicalDevice, &createInfo, nullptr, &logicalDevice);
+		VkResult result = vkCreateDevice(*physicalDevice, &createInfo, nullptr, &logicalDevice);
 		Check(result == VK_SUCCESS, "Failed to create logical device. Vulkan error: %d", result);
 
 		vkGetDeviceQueue(logicalDevice, queueFamilyIndices.graphicsFamily.value(), 0, &graphicsQueue);
@@ -814,7 +649,7 @@ namespace FGEngine
 
 	void VulkanRendererAPI::CreateSwapChain()
 	{
-		SwapChainSupportDetails supportDetails = QuerySwapChainSupport(physicalDevice, vulkanInstance->GetSurface());
+		SwapChainSupportDetails supportDetails = physicalDevice->GetSwapChainSupportDetails();
 		int width, height;
 		glfwGetFramebufferSize(nativeWindow, &width, &height);
 
@@ -850,7 +685,7 @@ namespace FGEngine
 		createInfo.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT; // render directly. If want to render to a separate image, use VK_IMAGE_USAGE_TRANSFER_DST_BIT instead.
 
 
-		QueueFamilyIndices indices = FindQueueFamilies(physicalDevice, vulkanInstance->GetSurface());
+		QueueFamilyIndices indices = physicalDevice->GetQueueFamilyIndices();
 		if (indices.graphicsFamily != indices.presentFamily)
 		{
 			uint32_t queueFamilyIndices[]
@@ -918,7 +753,7 @@ namespace FGEngine
 		colorAttachmentRef.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
 
 		VkAttachmentDescription depthAttachmentDescription{};
-		depthAttachmentDescription.format = FindDepthFormat(physicalDevice);
+		depthAttachmentDescription.format = FindDepthFormat(*physicalDevice);
 		depthAttachmentDescription.samples = msaaSamples;
 		depthAttachmentDescription.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
 		depthAttachmentDescription.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
@@ -1178,7 +1013,7 @@ namespace FGEngine
 
 	void VulkanRendererAPI::CreateCommandPool()
 	{
-		QueueFamilyIndices queueFamilyIndices = FindQueueFamilies(physicalDevice, vulkanInstance->GetSurface());
+		QueueFamilyIndices queueFamilyIndices = physicalDevice->GetQueueFamilyIndices();
 
 		VkCommandPoolCreateInfo createInfo{};
 		createInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
@@ -1218,7 +1053,7 @@ namespace FGEngine
 		VkMemoryAllocateInfo memoryAllocateInfo{};
 		memoryAllocateInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
 		memoryAllocateInfo.allocationSize = memoryRequirements.size;
-		memoryAllocateInfo.memoryTypeIndex = FindMemoryType(physicalDevice,
+		memoryAllocateInfo.memoryTypeIndex = FindMemoryType(*physicalDevice,
 			memoryRequirements.memoryTypeBits,
 			properties);
 
@@ -1243,7 +1078,7 @@ namespace FGEngine
 
 	void VulkanRendererAPI::CreateDepthResources()
 	{
-		VkFormat depthFormat = FindDepthFormat(physicalDevice);
+		VkFormat depthFormat = FindDepthFormat(*physicalDevice);
 		CreateImage(swapChainExtent.width, swapChainExtent.height, 1,
 			msaaSamples, depthFormat, VK_IMAGE_TILING_OPTIMAL,
 			VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
@@ -1295,7 +1130,7 @@ namespace FGEngine
 		vkDestroyBuffer(logicalDevice, stagingBuffer, nullptr);
 		vkFreeMemory(logicalDevice, stagingBufferMemory, nullptr);
 
-		GenerateMipmaps(physicalDevice, logicalDevice, graphicsQueue, commandPool, textureImage, VK_FORMAT_R8G8B8A8_SRGB, texture.GetWidth(), texture.GetHeight(), mipLevels);
+		GenerateMipmaps(*physicalDevice, logicalDevice, graphicsQueue, commandPool, textureImage, VK_FORMAT_R8G8B8A8_SRGB, texture.GetWidth(), texture.GetHeight(), mipLevels);
 	}
 
 	void VulkanRendererAPI::CreateTextureImageView()
@@ -1306,7 +1141,7 @@ namespace FGEngine
 	void VulkanRendererAPI::CreateTextureSampler()
 	{
 		VkPhysicalDeviceProperties properties{};
-		vkGetPhysicalDeviceProperties(physicalDevice, &properties);
+		vkGetPhysicalDeviceProperties(*physicalDevice, &properties);
 
 		VkSamplerCreateInfo samplerCreateInfo{};
 		samplerCreateInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
@@ -1356,7 +1191,7 @@ namespace FGEngine
 		VkMemoryAllocateInfo allocateInfo{};
 		allocateInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
 		allocateInfo.allocationSize = memoryRequirements.size;
-		allocateInfo.memoryTypeIndex = FindMemoryType(physicalDevice, memoryRequirements.memoryTypeBits, properties);
+		allocateInfo.memoryTypeIndex = FindMemoryType(*physicalDevice, memoryRequirements.memoryTypeBits, properties);
 
 		// NOTE: shouldn't do allocation for each individual buffer, instead should create a custom allocator
 		// ref: https://vulkan-tutorial.com/Vertex_buffers/Staging_buffer#:~:text=more%20complex%20geometry.-,Conclusion,-It%20should%20be
@@ -1667,53 +1502,6 @@ namespace FGEngine
 		result = vkEndCommandBuffer(commandBuffer);
 		Check(result == VK_SUCCESS, "Failed to record command buffer. Vulkan error: %d", result);
 	}
-
-	bool VulkanRendererAPI::CheckDeviceExtensionSupport()
-	{
-		uint32_t extensionCount;
-		vkEnumerateDeviceExtensionProperties(physicalDevice, nullptr, &extensionCount, nullptr);
-
-		std::vector<VkExtensionProperties> availableExtensions(extensionCount);
-		vkEnumerateDeviceExtensionProperties(physicalDevice, nullptr, &extensionCount, availableExtensions.data());
-
-		// check that all required extensions is available
-		std::set<std::string> requiredExtensions(deviceExtensions.begin(), deviceExtensions.end());
-		for (const VkExtensionProperties& extension : availableExtensions)
-		{
-			requiredExtensions.erase(extension.extensionName);
-			if (requiredExtensions.empty())
-			{
-				break;
-			}
-		}
-
-		return requiredExtensions.empty();
-	}
-
-	bool VulkanRendererAPI::IsDeviceSuitable(VkPhysicalDevice device)
-	{
-		QueueFamilyIndices queueFamilyIndices = FindQueueFamilies(device, vulkanInstance->GetSurface());
-
-		bool bExtensionSupported = CheckDeviceExtensionSupport();
-
-		bool bSwapChainAdequate = false;
-		if (bExtensionSupported)
-		{
-			SwapChainSupportDetails supportDetails = QuerySwapChainSupport(device, vulkanInstance->GetSurface());
-			bSwapChainAdequate = !supportDetails.surfaceFormats.empty() && !supportDetails.presentModes.empty();
-		}
-
-		VkPhysicalDeviceFeatures supportedFeatures;
-		vkGetPhysicalDeviceFeatures(physicalDevice, &supportedFeatures);
-
-		return queueFamilyIndices.IsComplete()
-			&& bExtensionSupported
-			&& bSwapChainAdequate
-			&& supportedFeatures.samplerAnisotropy;
-	}
-#pragma endregion
-
-#pragma region VertexBuffer
 #pragma endregion
 
 }

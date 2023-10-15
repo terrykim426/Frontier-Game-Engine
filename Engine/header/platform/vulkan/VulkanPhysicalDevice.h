@@ -1,21 +1,27 @@
 #pragma once
 
-#define GLFW_INCLUDE_VULKAN
-#include "GLFW/glfw3.h"
+#include "platform/vulkan/VulkanDefineType.h"
+
+struct VkPhysicalDevice_T;
 
 namespace FGEngine
 {
+	class VulkanInstance;
+
 	class VulkanPhysicalDevice
 	{
 	public:
-		VulkanPhysicalDevice(VkInstance vulkanInstance);
+		VulkanPhysicalDevice(const VulkanInstance* vulkanInstance, const std::vector<const char*>& deviceExtensions);
+
+		operator VkPhysicalDevice_T* () const { return physicalDevice; }
+		const QueueFamilyIndices GetQueueFamilyIndices() const { return queueFamilyIndices; }
+		const SwapChainSupportDetails GetSwapChainSupportDetails() const { return swapChainSupportDetails; }
+		VkSampleCountFlagBits GetMaxSampleCount() const { return maxSampleCount; }
 
 	private:
-		std::vector<VkPhysicalDevice> GetAllPhysicalDevices(VkInstance vulkanInstance);
-
-		bool IsDeviceSuitable(VkPhysicalDevice device);
-
-	private:
-		VkPhysicalDevice physicalDevice;
+		VkPhysicalDevice_T* physicalDevice;
+		QueueFamilyIndices queueFamilyIndices;
+		SwapChainSupportDetails swapChainSupportDetails;
+		VkSampleCountFlagBits maxSampleCount;
 	};
 }

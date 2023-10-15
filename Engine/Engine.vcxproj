@@ -147,6 +147,7 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClInclude Include="header\platform\vulkan\VulkanDefineType.h" />
     <ClInclude Include="header\renderer\Renderer.h" />
     <ClInclude Include="header\event\KeyboardEvent.h" />
     <ClInclude Include="header\event\MouseEvent.h" />

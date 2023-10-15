@@ -20,7 +20,7 @@
 namespace FGEngine
 {
 	class VulkanInstance;
-	//class VulkanPhysicalDevice;
+	class VulkanPhysicalDevice;
 
 	class VulkanRendererAPI : public IRendererAPI
 	{
@@ -41,7 +41,6 @@ namespace FGEngine
 		static bool IsSupported();
 
 	private:
-		void PickPhysicalDevice();
 		void CreateLogicalDevice();
 		void CreateSwapChain();
 		void CreateImageViews();
@@ -72,16 +71,12 @@ namespace FGEngine
 		void UpdateUniformBuffer(uint32_t currentImage);
 		void RecordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex);
 
-		bool CheckDeviceExtensionSupport();
-		bool IsDeviceSuitable(VkPhysicalDevice device);
-
 	private:
 		GLFWwindow* nativeWindow;
 
 		VulkanInstance* vulkanInstance;
-		//std::shared_ptr<VulkanPhysicalDevice> physicalDevice2;
+		VulkanPhysicalDevice* physicalDevice;
 
-		VkPhysicalDevice physicalDevice = VK_NULL_HANDLE;
 		VkDevice logicalDevice = VK_NULL_HANDLE;
 		VkSwapchainKHR swapChain;
 		VkQueue graphicsQueue;
