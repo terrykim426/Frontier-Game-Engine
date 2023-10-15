@@ -21,6 +21,7 @@ namespace FGEngine
 {
 	class VulkanInstance;
 	class VulkanPhysicalDevice;
+	class VulkanLogicalDevice;
 
 	class VulkanRendererAPI : public IRendererAPI
 	{
@@ -41,7 +42,6 @@ namespace FGEngine
 		static bool IsSupported();
 
 	private:
-		void CreateLogicalDevice();
 		void CreateSwapChain();
 		void CreateImageViews();
 		void CreateRenderPass();
@@ -76,11 +76,9 @@ namespace FGEngine
 
 		VulkanInstance* vulkanInstance;
 		VulkanPhysicalDevice* physicalDevice;
+		VulkanLogicalDevice* logicalDevice;
 
-		VkDevice logicalDevice = VK_NULL_HANDLE;
 		VkSwapchainKHR swapChain;
-		VkQueue graphicsQueue;
-		VkQueue presentQueue;
 		VkRenderPass renderPass;
 		VkDescriptorSetLayout descriptorSetLayout;
 		VkDescriptorPool descriptorPool;
