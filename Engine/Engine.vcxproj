@@ -171,6 +171,8 @@
     <ClInclude Include="header\platform\vulkan\VulkanRendererAPI.h" />
     <ClInclude Include="header\renderer\Texture.h" />
     <ClInclude Include="header\renderer\Vertex.h" />
+    <ClInclude Include="header\platform\vulkan\VulkanPhysicalDevice.h" />
+    <ClInclude Include="header\platform\vulkan\VulkanInstance.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\renderer\Mesh.cpp" />
@@ -193,6 +195,8 @@
     <ClCompile Include="src\platform\vulkan\VulkanRendererAPI.cpp" />
     <ClCompile Include="src\renderer\Texture.cpp" />
     <ClCompile Include="src\renderer\Vertex.cpp" />
+    <ClCompile Include="src\platform\vulkan\VulkanPhysicalDevice.cpp" />
+    <ClCompile Include="src\platform\vulkan\VulkanInstance.cpp" />
   </ItemGroup>
   <ItemGroup>
     <None Include="shader\TestShader.frag" />

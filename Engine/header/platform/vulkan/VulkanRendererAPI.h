@@ -19,6 +19,9 @@
 
 namespace FGEngine
 {
+	class VulkanInstance;
+	//class VulkanPhysicalDevice;
+
 	class VulkanRendererAPI : public IRendererAPI
 	{
 	public:
@@ -38,8 +41,6 @@ namespace FGEngine
 		static bool IsSupported();
 
 	private:
-		void CreateInstance();
-		void CreateSurface();
 		void PickPhysicalDevice();
 		void CreateLogicalDevice();
 		void CreateSwapChain();
@@ -71,17 +72,17 @@ namespace FGEngine
 		void UpdateUniformBuffer(uint32_t currentImage);
 		void RecordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex);
 
-		bool CheckValidationLayerSupport();
 		bool CheckDeviceExtensionSupport();
 		bool IsDeviceSuitable(VkPhysicalDevice device);
 
 	private:
 		GLFWwindow* nativeWindow;
 
-		VkInstance vulkanInstance;
+		VulkanInstance* vulkanInstance;
+		//std::shared_ptr<VulkanPhysicalDevice> physicalDevice2;
+
 		VkPhysicalDevice physicalDevice = VK_NULL_HANDLE;
 		VkDevice logicalDevice = VK_NULL_HANDLE;
-		VkSurfaceKHR surface;
 		VkSwapchainKHR swapChain;
 		VkQueue graphicsQueue;
 		VkQueue presentQueue;
@@ -132,21 +133,11 @@ namespace FGEngine
 		uint32_t currentFrame = 0;
 		bool bResizeRequested = false;
 
-		std::vector<const char*> validationLayers
-		{
-			"VK_LAYER_KHRONOS_validation"
-		};
-
 		std::vector<const char*> deviceExtensions
 		{
 			VK_KHR_SWAPCHAIN_EXTENSION_NAME
 		};
 
-#ifdef NDEBUG
-		const bool enableValidationLayers = false;
-#else
-		const bool enableValidationLayers = true;
-#endif
 		const int MAX_FRAMES_IN_FLIGHT = 2;
 
 		// TODO: To move to it own class

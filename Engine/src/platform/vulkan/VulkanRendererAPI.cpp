@@ -1,5 +1,7 @@
 #include "pch.h"
 #include "platform/vulkan/VulkanRendererAPI.h"
+#include "platform/vulkan/VulkanInstance.h"
+
 #include "core/Logger.h"
 #include "renderer/Texture.h"
 #include "renderer/Model.h"
@@ -494,8 +496,8 @@ namespace FGEngine
 		VkPhysicalDeviceProperties physicalDeviceProperties;
 		vkGetPhysicalDeviceProperties(physicalDevice, &physicalDeviceProperties);
 
-		VkSampleCountFlags counts = 
-			physicalDeviceProperties.limits.framebufferColorSampleCounts & 
+		VkSampleCountFlags counts =
+			physicalDeviceProperties.limits.framebufferColorSampleCounts &
 			physicalDeviceProperties.limits.framebufferDepthSampleCounts;
 
 		if (counts & VK_SAMPLE_COUNT_64_BIT) return VK_SAMPLE_COUNT_64_BIT;
@@ -515,8 +517,14 @@ namespace FGEngine
 		nativeWindow = rendererProperties.nativeWindow;
 		Check(nativeWindow, "No window supplied!");
 
-		CreateInstance();
-		CreateSurface();
+		vulkanInstance = new VulkanInstance(nativeWindow,
+			VulkanInstanceParameters
+			{
+			"Temp Frontier Application Name",	// TODO: to be forwarded from application layer
+			"Frontier Game Engine"				// TODO: hardcode this at the header file?
+			});
+
+
 		PickPhysicalDevice();
 		CreateLogicalDevice();
 		CreateSwapChain();
@@ -582,8 +590,8 @@ namespace FGEngine
 		vkDestroyRenderPass(logicalDevice, renderPass, nullptr);
 
 		vkDestroyDevice(logicalDevice, nullptr);
-		vkDestroySurfaceKHR(vulkanInstance, surface, nullptr);
-		vkDestroyInstance(vulkanInstance, nullptr);
+
+		delete vulkanInstance;
 	}
 
 	void VulkanRendererAPI::SetClearColor(float r, float g, float b, float a)
@@ -686,65 +694,15 @@ namespace FGEngine
 		return glfwVulkanSupported();
 	}
 
-	void VulkanRendererAPI::CreateInstance()
-	{
-		if (enableValidationLayers)
-		{
-			Check(CheckValidationLayerSupport(), "Validation requested but not available");
-		}
-
-		VkApplicationInfo appInfo{};
-		appInfo.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
-		appInfo.pApplicationName = "Hello Triangle";
-		appInfo.applicationVersion = VK_MAKE_VERSION(1, 0, 0);
-		appInfo.pEngineName = "No Engine";
-		appInfo.engineVersion = VK_MAKE_VERSION(1, 0, 0);
-		appInfo.apiVersion = VK_API_VERSION_1_0;
-
-		VkInstanceCreateInfo createInfo{};
-		createInfo.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
-		createInfo.pApplicationInfo = &appInfo;
-
-		uint32_t glfwExtensionCount = 0;
-		createInfo.ppEnabledExtensionNames = glfwGetRequiredInstanceExtensions(&glfwExtensionCount);
-		createInfo.enabledExtensionCount = glfwExtensionCount;
-
-		uint32_t layerCount = 0;
-		if (enableValidationLayers)
-		{
-			layerCount += static_cast<uint32_t>(validationLayers.size());
-			createInfo.ppEnabledLayerNames = validationLayers.data();
-		}
-		createInfo.enabledLayerCount = layerCount;
-
-		VkResult result = vkCreateInstance(&createInfo, nullptr, &vulkanInstance);
-		if (result != VK_SUCCESS)
-		{
-			LogAssert("Failed to create vulkan instance. Vulkan error: %d", result);
-
-			/* Note: there might be a case where it doesn't work on mac.
-			* https://vulkan-tutorial.com/Drawing_a_triangle/Setup/Instance#:~:text=is%20created%20successfully.-,Encountered%20VK_ERROR_INCOMPATIBLE_DRIVER,-%3A
-			*/
-		}
-	}
-
-	void VulkanRendererAPI::CreateSurface()
-	{
-		Check(nativeWindow, "No window supplied!");
-
-		VkResult result = glfwCreateWindowSurface(vulkanInstance, nativeWindow, nullptr, &surface);
-		Check(result == VK_SUCCESS, "Failed to create surface! Vulkan error: %d", result);
-	}
-
 	void VulkanRendererAPI::PickPhysicalDevice()
 	{
 		uint32_t deviceCount = 0;
-		vkEnumeratePhysicalDevices(vulkanInstance, &deviceCount, nullptr);
+		vkEnumeratePhysicalDevices(*vulkanInstance, &deviceCount, nullptr);
 
 		Check(deviceCount > 0, "No vulkan-supported GPU is found!");
 
 		std::vector<VkPhysicalDevice> devices(deviceCount);
-		vkEnumeratePhysicalDevices(vulkanInstance, &deviceCount, devices.data());
+		vkEnumeratePhysicalDevices(*vulkanInstance, &deviceCount, devices.data());
 
 		if (devices.size() == 1)
 		{
@@ -806,7 +764,7 @@ namespace FGEngine
 
 	void VulkanRendererAPI::CreateLogicalDevice()
 	{
-		QueueFamilyIndices queueFamilyIndices = FindQueueFamilies(physicalDevice, surface);
+		QueueFamilyIndices queueFamilyIndices = FindQueueFamilies(physicalDevice, vulkanInstance->GetSurface());
 
 		std::vector<VkDeviceQueueCreateInfo> queueCreateInfos;
 		std::set<uint32_t> uniqueQueueFamilyIndices
@@ -837,10 +795,10 @@ namespace FGEngine
 		createInfo.ppEnabledExtensionNames = deviceExtensions.data();
 		createInfo.enabledExtensionCount = static_cast<uint32_t>(deviceExtensions.size());
 
-		if (enableValidationLayers)
+		if (vulkanInstance->bEnableValidationLayers)
 		{
-			createInfo.ppEnabledLayerNames = validationLayers.data();
-			createInfo.enabledLayerCount = static_cast<uint32_t>(validationLayers.size());
+			createInfo.ppEnabledLayerNames = vulkanInstance->validationLayers.data();
+			createInfo.enabledLayerCount = static_cast<uint32_t>(vulkanInstance->validationLayers.size());
 		}
 		else
 		{
@@ -856,7 +814,7 @@ namespace FGEngine
 
 	void VulkanRendererAPI::CreateSwapChain()
 	{
-		SwapChainSupportDetails supportDetails = QuerySwapChainSupport(physicalDevice, surface);
+		SwapChainSupportDetails supportDetails = QuerySwapChainSupport(physicalDevice, vulkanInstance->GetSurface());
 		int width, height;
 		glfwGetFramebufferSize(nativeWindow, &width, &height);
 
@@ -883,7 +841,7 @@ namespace FGEngine
 
 		VkSwapchainCreateInfoKHR createInfo{};
 		createInfo.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
-		createInfo.surface = surface;
+		createInfo.surface = vulkanInstance->GetSurface();
 		createInfo.minImageCount = imageCount;
 		createInfo.imageFormat = surfaceFormat.format;
 		createInfo.imageColorSpace = surfaceFormat.colorSpace;
@@ -892,7 +850,7 @@ namespace FGEngine
 		createInfo.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT; // render directly. If want to render to a separate image, use VK_IMAGE_USAGE_TRANSFER_DST_BIT instead.
 
 
-		QueueFamilyIndices indices = FindQueueFamilies(physicalDevice, surface);
+		QueueFamilyIndices indices = FindQueueFamilies(physicalDevice, vulkanInstance->GetSurface());
 		if (indices.graphicsFamily != indices.presentFamily)
 		{
 			uint32_t queueFamilyIndices[]
@@ -1220,7 +1178,7 @@ namespace FGEngine
 
 	void VulkanRendererAPI::CreateCommandPool()
 	{
-		QueueFamilyIndices queueFamilyIndices = FindQueueFamilies(physicalDevice, surface);
+		QueueFamilyIndices queueFamilyIndices = FindQueueFamilies(physicalDevice, vulkanInstance->GetSurface());
 
 		VkCommandPoolCreateInfo createInfo{};
 		createInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
@@ -1231,8 +1189,8 @@ namespace FGEngine
 		Check(result == VK_SUCCESS, "Failed to create command pool. Vulkan error: %d", result);
 	}
 
-	void VulkanRendererAPI::CreateImage(uint32_t width, uint32_t height, uint32_t mipLevels, 
-		VkSampleCountFlagBits numSamples, VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage, 
+	void VulkanRendererAPI::CreateImage(uint32_t width, uint32_t height, uint32_t mipLevels,
+		VkSampleCountFlagBits numSamples, VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage,
 		VkMemoryPropertyFlags properties, VkImage& image, VkDeviceMemory& imageMemory)
 	{
 		VkImageCreateInfo imageCreateInfo{};
@@ -1710,36 +1668,6 @@ namespace FGEngine
 		Check(result == VK_SUCCESS, "Failed to record command buffer. Vulkan error: %d", result);
 	}
 
-	bool VulkanRendererAPI::CheckValidationLayerSupport()
-	{
-		uint32_t layerCount;
-		vkEnumerateInstanceLayerProperties(&layerCount, nullptr);
-
-		std::vector<VkLayerProperties> availableLayers(layerCount);
-		vkEnumerateInstanceLayerProperties(&layerCount, availableLayers.data());
-
-		// check that all validation layers are available
-		for (const char* layer : validationLayers)
-		{
-			bool bLayerFound = false;
-			for (const VkLayerProperties& property : availableLayers)
-			{
-				if (strcmp(layer, property.layerName))
-				{
-					bLayerFound = true;
-					break;
-				}
-			}
-
-			if (!bLayerFound)
-			{
-				return false;
-			}
-		}
-
-		return true;
-	}
-
 	bool VulkanRendererAPI::CheckDeviceExtensionSupport()
 	{
 		uint32_t extensionCount;
@@ -1764,14 +1692,14 @@ namespace FGEngine
 
 	bool VulkanRendererAPI::IsDeviceSuitable(VkPhysicalDevice device)
 	{
-		QueueFamilyIndices queueFamilyIndices = FindQueueFamilies(device, surface);
+		QueueFamilyIndices queueFamilyIndices = FindQueueFamilies(device, vulkanInstance->GetSurface());
 
 		bool bExtensionSupported = CheckDeviceExtensionSupport();
 
 		bool bSwapChainAdequate = false;
 		if (bExtensionSupported)
 		{
-			SwapChainSupportDetails supportDetails = QuerySwapChainSupport(device, surface);
+			SwapChainSupportDetails supportDetails = QuerySwapChainSupport(device, vulkanInstance->GetSurface());
 			bSwapChainAdequate = !supportDetails.surfaceFormats.empty() && !supportDetails.presentModes.empty();
 		}
 
