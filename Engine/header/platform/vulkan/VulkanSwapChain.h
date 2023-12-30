@@ -2,6 +2,8 @@
 
 #include "vulkan/vulkan_core.h"
 
+#include <memory>
+
 struct GLFWwindow;
 
 namespace FGEngine
@@ -13,15 +15,15 @@ namespace FGEngine
 	class VulkanSwapChain
 	{
 	public:
-		VulkanSwapChain(VulkanInstance* vulkanInstance, VulkanPhysicalDevice* physicalDevice, VulkanLogicalDevice* inLogicalDevice, GLFWwindow* nativeWindow);
+		VulkanSwapChain(const std::shared_ptr<VulkanInstance>& vulkanInstance, const std::shared_ptr<VulkanPhysicalDevice>& physicalDevice, const std::shared_ptr<VulkanLogicalDevice>& inLogicalDevice, GLFWwindow* nativeWindow);
 		~VulkanSwapChain();
 
-		void Recreate(VulkanInstance* vulkanInstance, VulkanPhysicalDevice* physicalDevice, GLFWwindow* nativeWindow);
+		void Recreate(const std::shared_ptr<VulkanInstance>& vulkanInstance, const std::shared_ptr<VulkanPhysicalDevice>& physicalDevice, GLFWwindow* nativeWindow);
 
 		operator VkSwapchainKHR () const { return swapChain; }
 
 	private:
-		void CreateSwapChain(VulkanInstance* vulkanInstance, VulkanPhysicalDevice* physicalDevice, GLFWwindow* nativeWindow);
+		void CreateSwapChain(const std::shared_ptr<VulkanInstance>& vulkanInstance, const std::shared_ptr<VulkanPhysicalDevice>& physicalDevice, GLFWwindow* nativeWindow);
 		void CreateImageViews();
 		void CleanUp();
 
@@ -38,7 +40,7 @@ namespace FGEngine
 		}
 
 	private:
-		VulkanLogicalDevice* logicalDevice;	// TODO: change it to share ptr?
+		std::shared_ptr<VulkanLogicalDevice> logicalDevice;
 
 		VkSwapchainKHR swapChain;
 		std::vector<VkImage> images;

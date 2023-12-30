@@ -2,6 +2,8 @@
 
 #include "platform/vulkan/VulkanDefineType.h"
 
+#include <memory>
+
 struct VkPhysicalDevice_T;
 
 namespace FGEngine
@@ -11,9 +13,9 @@ namespace FGEngine
 	class VulkanPhysicalDevice
 	{
 	public:
-		VulkanPhysicalDevice(const VulkanInstance* vulkanInstance, const std::vector<const char*>& deviceExtensions);
+		VulkanPhysicalDevice(const std::shared_ptr<VulkanInstance>& vulkanInstance, const std::vector<const char*>& deviceExtensions);
 
-		void Refresh(const VulkanInstance* vulkanInstance);
+		void Refresh(const std::shared_ptr<VulkanInstance>& vulkanInstance);
 
 		operator VkPhysicalDevice_T* () const { return physicalDevice; }
 		const QueueFamilyIndices GetQueueFamilyIndices() const { return queueFamilyIndices; }

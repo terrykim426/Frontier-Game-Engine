@@ -9,7 +9,7 @@ namespace FGEngine
 	class VulkanUtil
 	{
 	public:
-		static VkImageView CreateImageView(VulkanLogicalDevice* device, VkImage image, VkFormat format, VkImageAspectFlags aspectFlags, uint32_t mipLevels);
+		static VkImageView CreateImageView(const std::shared_ptr<VulkanLogicalDevice>& device, VkImage image, VkFormat format, VkImageAspectFlags aspectFlags, uint32_t mipLevels);
 
 
 		template <typename T>

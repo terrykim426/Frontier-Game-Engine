@@ -2,12 +2,14 @@
 #include "platform/vulkan/VulkanUtil.h"
 #include "platform/vulkan/VulkanLogicalDevice.h"
 
+#include <memory>
+
 #define GLFW_INCLUDE_VULKAN
 #include "GLFW/glfw3.h"
 
 namespace FGEngine
 {
-	VkImageView VulkanUtil::CreateImageView(VulkanLogicalDevice* device, VkImage image, VkFormat format, VkImageAspectFlags aspectFlags, uint32_t mipLevels)
+	VkImageView VulkanUtil::CreateImageView(const std::shared_ptr<VulkanLogicalDevice>& device, VkImage image, VkFormat format, VkImageAspectFlags aspectFlags, uint32_t mipLevels)
 	{
 		VkImageViewCreateInfo createInfo{};
 		createInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;

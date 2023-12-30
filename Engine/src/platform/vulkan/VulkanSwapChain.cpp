@@ -62,7 +62,7 @@ namespace FGEngine
 	}
 #pragma endregion
 
-	VulkanSwapChain::VulkanSwapChain(VulkanInstance* vulkanInstance, VulkanPhysicalDevice* physicalDevice, VulkanLogicalDevice* inLogicalDevice, GLFWwindow* nativeWindow)
+	VulkanSwapChain::VulkanSwapChain(const std::shared_ptr<VulkanInstance>& vulkanInstance, const std::shared_ptr<VulkanPhysicalDevice>& physicalDevice, const std::shared_ptr<VulkanLogicalDevice>& inLogicalDevice, GLFWwindow* nativeWindow)
 	{
 		logicalDevice = inLogicalDevice;
 
@@ -75,7 +75,7 @@ namespace FGEngine
 		CleanUp();
 	}
 
-	void VulkanSwapChain::Recreate(VulkanInstance* vulkanInstance, VulkanPhysicalDevice* physicalDevice, GLFWwindow* nativeWindow)
+	void VulkanSwapChain::Recreate(const std::shared_ptr<VulkanInstance>& vulkanInstance, const std::shared_ptr<VulkanPhysicalDevice>& physicalDevice, GLFWwindow* nativeWindow)
 	{
 		int width = 0, height = 0;
 		while (width == 0 || height == 0)
@@ -95,7 +95,7 @@ namespace FGEngine
 		//CreateFrameBuffers();
 	}
 
-	void VulkanSwapChain::CreateSwapChain(VulkanInstance* vulkanInstance, VulkanPhysicalDevice* physicalDevice, GLFWwindow* nativeWindow)
+	void VulkanSwapChain::CreateSwapChain(const std::shared_ptr<VulkanInstance>& vulkanInstance, const std::shared_ptr<VulkanPhysicalDevice>& physicalDevice, GLFWwindow* nativeWindow)
 	{
 		SwapChainSupportDetails supportDetails = physicalDevice->GetSwapChainSupportDetails();
 		int width, height;

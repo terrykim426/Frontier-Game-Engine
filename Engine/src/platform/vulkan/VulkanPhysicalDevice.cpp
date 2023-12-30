@@ -4,6 +4,7 @@
 
 #include <algorithm>
 #include <set>
+#include <memory>
 
 #define GLFW_INCLUDE_VULKAN
 #include "GLFW/glfw3.h"
@@ -147,7 +148,7 @@ namespace FGEngine
 		return VK_SAMPLE_COUNT_1_BIT;
 	}
 
-	VkPhysicalDevice PickPhysicalDevice(std::vector<VkPhysicalDevice>& devices, const VulkanInstance* vulkanInstance, const std::vector<const char*>& deviceExtensions)
+	VkPhysicalDevice PickPhysicalDevice(std::vector<VkPhysicalDevice>& devices, const std::shared_ptr<VulkanInstance>& vulkanInstance, const std::vector<const char*>& deviceExtensions)
 	{
 		if (devices.size() == 1)
 		{
@@ -203,7 +204,7 @@ namespace FGEngine
 #pragma endregion
 
 
-	VulkanPhysicalDevice::VulkanPhysicalDevice(const VulkanInstance* vulkanInstance, const std::vector<const char*>& deviceExtensions)
+	VulkanPhysicalDevice::VulkanPhysicalDevice(const std::shared_ptr<VulkanInstance>& vulkanInstance, const std::vector<const char*>& deviceExtensions)
 	{
 		std::vector<VkPhysicalDevice> devices = GetAllPhysicalDevices(*vulkanInstance);
 		physicalDevice = PickPhysicalDevice(devices, vulkanInstance, deviceExtensions);
@@ -215,7 +216,7 @@ namespace FGEngine
 		Refresh(vulkanInstance);
 	}
 
-	void VulkanPhysicalDevice::Refresh(const VulkanInstance* vulkanInstance)
+	void VulkanPhysicalDevice::Refresh(const std::shared_ptr<VulkanInstance>& vulkanInstance)
 	{
 		swapChainSupportDetails = QuerySwapChainSupport(physicalDevice, vulkanInstance->GetSurface());
 		queueFamilyIndices = FindQueueFamilies(physicalDevice, vulkanInstance->GetSurface());

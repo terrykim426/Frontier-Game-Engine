@@ -11,7 +11,7 @@ namespace FGEngine
 	class VulkanLogicalDevice
 	{
 	public:
-		VulkanLogicalDevice(const VulkanInstance* vulkanInstance, const VulkanPhysicalDevice* physicalDevice, const std::vector<const char*>& deviceExtensions);
+		VulkanLogicalDevice(const std::shared_ptr<VulkanInstance>& vulkanInstance, const std::shared_ptr<VulkanPhysicalDevice>& physicalDevice, const std::vector<const char*>& deviceExtensions);
 		~VulkanLogicalDevice();
 
 		operator VkDevice_T* () const { return device; }

@@ -5,6 +5,7 @@
 
 #include <vector>
 #include <optional>
+#include <memory>
 
 #pragma region VertexBuffer
 #include <array>
@@ -72,10 +73,10 @@ namespace FGEngine
 	private:
 		GLFWwindow* nativeWindow;
 
-		VulkanInstance* vulkanInstance;
-		VulkanPhysicalDevice* physicalDevice;
-		VulkanLogicalDevice* logicalDevice;
-		VulkanSwapChain* swapChain;
+		std::shared_ptr<VulkanInstance> vulkanInstance;
+		std::shared_ptr<VulkanPhysicalDevice> physicalDevice;
+		std::shared_ptr<VulkanLogicalDevice> logicalDevice;
+		std::shared_ptr<VulkanSwapChain> swapChain;
 
 		VkRenderPass renderPass;
 		VkDescriptorSetLayout descriptorSetLayout;

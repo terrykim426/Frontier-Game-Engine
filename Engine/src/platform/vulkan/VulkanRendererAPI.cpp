@@ -127,7 +127,7 @@ namespace FGEngine
 		return false;
 	}
 
-	static VkCommandBuffer BeginSingleTimeCommands(const VulkanLogicalDevice* logicalDevice, VkCommandPool commandPool)
+	static VkCommandBuffer BeginSingleTimeCommands(const std::shared_ptr<VulkanLogicalDevice>& logicalDevice, VkCommandPool commandPool)
 	{
 		VkCommandBufferAllocateInfo allocateInfo{};
 		allocateInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
@@ -147,7 +147,7 @@ namespace FGEngine
 		return commandBuffer;
 	}
 
-	static void EndSingleTimeCommands(const VulkanLogicalDevice* logicalDevice, VkCommandPool commandPool, VkCommandBuffer commandBuffer)
+	static void EndSingleTimeCommands(const std::shared_ptr<VulkanLogicalDevice>& logicalDevice, VkCommandPool commandPool, VkCommandBuffer commandBuffer)
 	{
 		vkEndCommandBuffer(commandBuffer);
 
@@ -162,7 +162,7 @@ namespace FGEngine
 		vkFreeCommandBuffers(*logicalDevice, commandPool, 1, &commandBuffer);
 	}
 
-	static void CopyBuffer(const VulkanLogicalDevice* logicalDevice, VkCommandPool commandPool, VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize size)
+	static void CopyBuffer(const std::shared_ptr<VulkanLogicalDevice> logicalDevice, VkCommandPool commandPool, VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize size)
 	{
 		VkCommandBuffer commandBuffer = BeginSingleTimeCommands(logicalDevice, commandPool);
 		{
@@ -176,7 +176,7 @@ namespace FGEngine
 		EndSingleTimeCommands(logicalDevice, commandPool, commandBuffer);
 	}
 
-	static void TransitionImageLayout(const VulkanLogicalDevice* logicalDevice, VkCommandPool commandPool, VkImage image, VkFormat format, VkImageLayout oldLayout, VkImageLayout newLayout, uint32_t mipLevels)
+	static void TransitionImageLayout(const std::shared_ptr<VulkanLogicalDevice>& logicalDevice, VkCommandPool commandPool, VkImage image, VkFormat format, VkImageLayout oldLayout, VkImageLayout newLayout, uint32_t mipLevels)
 	{
 		VkCommandBuffer commandBuffer = BeginSingleTimeCommands(logicalDevice, commandPool);
 		{
@@ -227,7 +227,7 @@ namespace FGEngine
 		EndSingleTimeCommands(logicalDevice, commandPool, commandBuffer);
 	}
 
-	static void CopyBufferToImage(const VulkanLogicalDevice* logicalDevice, VkCommandPool commandPool, VkBuffer buffer, VkImage image, uint32_t width, uint32_t height)
+	static void CopyBufferToImage(const std::shared_ptr<VulkanLogicalDevice>& logicalDevice, VkCommandPool commandPool, VkBuffer buffer, VkImage image, uint32_t width, uint32_t height)
 	{
 		VkCommandBuffer commandBuffer = BeginSingleTimeCommands(logicalDevice, commandPool);
 		{
@@ -274,7 +274,7 @@ namespace FGEngine
 		return imageView;
 	}
 
-	void GenerateMipmaps(VkPhysicalDevice physicalDevice, const VulkanLogicalDevice* logicalDevice, VkCommandPool commandPool, VkImage image, VkFormat imageFormat, int32_t textureWidth, int32_t textureHeight, uint32_t mipLevels)
+	void GenerateMipmaps(VkPhysicalDevice physicalDevice, const std::shared_ptr<VulkanLogicalDevice>& logicalDevice, VkCommandPool commandPool, VkImage image, VkFormat imageFormat, int32_t textureWidth, int32_t textureHeight, uint32_t mipLevels)
 	{
 		VkFormatProperties formatProperties;
 		vkGetPhysicalDeviceFormatProperties(physicalDevice, imageFormat, &formatProperties);
@@ -372,19 +372,19 @@ namespace FGEngine
 		nativeWindow = rendererProperties.nativeWindow;
 		Check(nativeWindow, "No window supplied!");
 
-		vulkanInstance = new VulkanInstance(nativeWindow,
+		vulkanInstance = std::make_shared<VulkanInstance>(nativeWindow,
 			VulkanInstanceParameters
 			{
 			"Temp Frontier Application Name",	// TODO: to be forwarded from application layer
 			"Frontier Game Engine"				// TODO: hardcode this at the header file?
 			});
 
-		physicalDevice = new VulkanPhysicalDevice(vulkanInstance, deviceExtensions);
+		physicalDevice = std::make_shared<VulkanPhysicalDevice>(vulkanInstance, deviceExtensions);
 		msaaSamples = physicalDevice->GetMaxSampleCount();
 
-		logicalDevice = new VulkanLogicalDevice(vulkanInstance, physicalDevice, deviceExtensions);
+		logicalDevice = std::make_shared<VulkanLogicalDevice>(vulkanInstance, physicalDevice, deviceExtensions);
 
-		swapChain = new VulkanSwapChain(vulkanInstance, physicalDevice, logicalDevice, nativeWindow);
+		swapChain = std::make_shared<VulkanSwapChain>(vulkanInstance, physicalDevice, logicalDevice, nativeWindow);
 
 		CreateRenderPass();
 		CreateDescriptorSetLayout();
@@ -446,11 +446,6 @@ namespace FGEngine
 		vkDestroyPipeline(*logicalDevice, graphicsPipeline, nullptr);
 		vkDestroyPipelineLayout(*logicalDevice, pipelineLayout, nullptr);
 		vkDestroyRenderPass(*logicalDevice, renderPass, nullptr);
-
-		delete swapChain;
-		delete logicalDevice;
-		delete physicalDevice;
-		delete vulkanInstance;
 	}
 
 	void VulkanRendererAPI::SetClearColor(float r, float g, float b, float a)

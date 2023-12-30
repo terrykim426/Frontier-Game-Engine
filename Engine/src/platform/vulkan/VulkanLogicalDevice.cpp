@@ -10,7 +10,7 @@
 
 namespace FGEngine
 {
-	VulkanLogicalDevice::VulkanLogicalDevice(const VulkanInstance* vulkanInstance, const VulkanPhysicalDevice* physicalDevice, const std::vector<const char*>& deviceExtensions)
+	VulkanLogicalDevice::VulkanLogicalDevice(const std::shared_ptr<VulkanInstance>& vulkanInstance, const std::shared_ptr<VulkanPhysicalDevice>& physicalDevice, const std::vector<const char*>& deviceExtensions)
 	{
 		QueueFamilyIndices queueFamilyIndices = physicalDevice->GetQueueFamilyIndices();
 
