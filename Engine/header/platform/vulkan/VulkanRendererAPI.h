@@ -24,6 +24,7 @@ namespace FGEngine
 	class VulkanPhysicalDevice;
 	class VulkanLogicalDevice;
 	class VulkanSwapChain;
+	class VulkanCommand;
 
 	class VulkanRendererAPI : public IRendererAPI
 	{
@@ -47,7 +48,6 @@ namespace FGEngine
 		void CreateRenderPass();
 		void CreateDescriptorSetLayout();
 		void CreateGraphicsPipeline();
-		void CreateCommandPool();
 		void CreateImage(uint32_t width, uint32_t height, uint32_t mipLevels, VkSampleCountFlagBits numSamples, VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage, VkMemoryPropertyFlags properties, VkImage& image, VkDeviceMemory& imageMemory);
 		void CreateColorResources();
 		void CreateDepthResources();
@@ -61,7 +61,6 @@ namespace FGEngine
 		void CreateUniformBuffer();
 		void CreateDescriptorPool();
 		void CreateDescriptorSets();
-		void CreateCommandBuffers();
 		void CreateSyncObjects();
 
 		void CleanUpSwapChain();
@@ -84,8 +83,9 @@ namespace FGEngine
 		std::vector<VkDescriptorSet> descriptorSets;
 		VkPipelineLayout pipelineLayout;
 		VkPipeline graphicsPipeline;
-		VkCommandPool commandPool;
-		std::vector<VkCommandBuffer> commandBuffers;
+
+		std::shared_ptr<VulkanCommand> command;
+
 		VkBuffer vertexBuffer;
 		VkDeviceMemory vertexBufferMemory;
 		VkBuffer indexBuffer;

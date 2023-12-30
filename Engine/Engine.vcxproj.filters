@@ -105,6 +105,9 @@
     <ClInclude Include="header\platform\vulkan\VulkanUtil.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="header\platform\vulkan\VulkanCommand.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="dllmain.cpp">
@@ -165,6 +168,9 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="src\platform\vulkan\VulkanUtil.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\platform\vulkan\VulkanCommand.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>

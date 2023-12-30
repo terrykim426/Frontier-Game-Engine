@@ -2,6 +2,8 @@
 
 #include "renderer/Vertex.h"
 
+#include <vector>
+
 struct aiMesh;
 
 namespace FGEngine

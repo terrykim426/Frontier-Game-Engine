@@ -3,6 +3,7 @@
 #include "renderer/Mesh.h"
 
 #include <string>
+#include <vector>
 
 namespace FGEngine
 {

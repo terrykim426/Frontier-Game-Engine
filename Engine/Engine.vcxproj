@@ -177,6 +177,7 @@
     <ClInclude Include="header\platform\vulkan\VulkanLogicalDevice.h" />
     <ClInclude Include="header\platform\vulkan\VulkanSwapChain.h" />
     <ClInclude Include="header\platform\vulkan\VulkanUtil.h" />
+    <ClInclude Include="header\platform\vulkan\VulkanCommand.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\renderer\Mesh.cpp" />
@@ -204,6 +205,7 @@
     <ClCompile Include="src\platform\vulkan\VulkanLogicalDevice.cpp" />
     <ClCompile Include="src\platform\vulkan\VulkanSwapChain.cpp" />
     <ClCompile Include="src\platform\vulkan\VulkanUtil.cpp" />
+    <ClCompile Include="src\platform\vulkan\VulkanCommand.cpp" />
   </ItemGroup>
   <ItemGroup>
     <None Include="shader\TestShader.frag" />

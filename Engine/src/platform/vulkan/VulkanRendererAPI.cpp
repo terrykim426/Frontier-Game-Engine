@@ -5,6 +5,7 @@
 #include "platform/vulkan/VulkanPhysicalDevice.h"
 #include "platform/vulkan/VulkanLogicalDevice.h"
 #include "platform/vulkan/VulkanSwapChain.h"
+#include "platform/vulkan/VulkanCommand.h"
 
 #include "core/Logger.h"
 #include "renderer/Texture.h"
@@ -395,7 +396,8 @@ namespace FGEngine
 
 		swapChain->CreateFrameBuffers(colorImageView, depthImageView, renderPass);
 
-		CreateCommandPool();
+		command = std::make_shared<VulkanCommand>(physicalDevice, logicalDevice, MAX_FRAMES_IN_FLIGHT);
+
 		CreateTextureImage();
 		CreateTextureImageView();
 		CreateTextureSampler();
@@ -405,7 +407,6 @@ namespace FGEngine
 		CreateUniformBuffer();
 		CreateDescriptorPool();
 		CreateDescriptorSets();
-		CreateCommandBuffers();
 		CreateSyncObjects();
 	}
 
@@ -427,8 +428,6 @@ namespace FGEngine
 			delete model;
 			model = nullptr;
 		}
-
-		vkDestroyCommandPool(*logicalDevice, commandPool, nullptr);
 
 		CleanUpSwapChain();
 
@@ -472,8 +471,10 @@ namespace FGEngine
 
 		vkResetFences(*logicalDevice, 1, &inFlightFences[currentFrame]);
 
-		vkResetCommandBuffer(commandBuffers[currentFrame], 0);
-		RecordCommandBuffer(commandBuffers[currentFrame], imageIndex);
+		VkCommandBuffer commandBuffer;
+		command->GetBuffer(currentFrame, commandBuffer);
+		vkResetCommandBuffer(commandBuffer, 0);
+		RecordCommandBuffer(commandBuffer, imageIndex);
 
 		UpdateUniformBuffer(currentFrame);
 
@@ -486,7 +487,7 @@ namespace FGEngine
 		submitInfo.pWaitSemaphores = waitSemaphores;
 		submitInfo.pWaitDstStageMask = waitStages;
 		submitInfo.commandBufferCount = 1;
-		submitInfo.pCommandBuffers = &commandBuffers[currentFrame];
+		submitInfo.pCommandBuffers = &commandBuffer;
 		submitInfo.signalSemaphoreCount = 1;
 		submitInfo.pSignalSemaphores = signalSemaphores;
 
@@ -797,19 +798,6 @@ namespace FGEngine
 		vkDestroyShaderModule(*logicalDevice, fragShaderModule, nullptr);
 	}
 
-	void VulkanRendererAPI::CreateCommandPool()
-	{
-		QueueFamilyIndices queueFamilyIndices = physicalDevice->GetQueueFamilyIndices();
-
-		VkCommandPoolCreateInfo createInfo{};
-		createInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
-		createInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
-		createInfo.queueFamilyIndex = queueFamilyIndices.graphicsFamily.value();
-
-		VkResult result = vkCreateCommandPool(*logicalDevice, &createInfo, nullptr, &commandPool);
-		Check(result == VK_SUCCESS, "Failed to create command pool. Vulkan error: %d", result);
-	}
-
 	void VulkanRendererAPI::CreateImage(uint32_t width, uint32_t height, uint32_t mipLevels,
 		VkSampleCountFlagBits numSamples, VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage,
 		VkMemoryPropertyFlags properties, VkImage& image, VkDeviceMemory& imageMemory)
@@ -901,22 +889,21 @@ namespace FGEngine
 			VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
 			textureImage, textureImageMemory);
 
-		TransitionImageLayout(logicalDevice, commandPool,
+		TransitionImageLayout(logicalDevice, command->GetPool(),
 			textureImage, VK_FORMAT_R8G8B8A8_SRGB,
 			VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, mipLevels);
 
-		CopyBufferToImage(logicalDevice, commandPool,
+		CopyBufferToImage(logicalDevice, command->GetPool(),
 			stagingBuffer, textureImage,
 			texture.GetWidth(), texture.GetHeight());
 
 		/*TransitionImageLayout(logicalDevice, commandPool,
 			textureImage, VK_FORMAT_R8G8B8A8_SRGB,
 			VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, mipLevels);*/
-
 		vkDestroyBuffer(*logicalDevice, stagingBuffer, nullptr);
 		vkFreeMemory(*logicalDevice, stagingBufferMemory, nullptr);
 
-		GenerateMipmaps(*physicalDevice, logicalDevice, commandPool, textureImage, VK_FORMAT_R8G8B8A8_SRGB, texture.GetWidth(), texture.GetHeight(), mipLevels);
+		GenerateMipmaps(*physicalDevice, logicalDevice, command->GetPool(), textureImage, VK_FORMAT_R8G8B8A8_SRGB, texture.GetWidth(), texture.GetHeight(), mipLevels);
 	}
 
 	void VulkanRendererAPI::CreateTextureImageView()
@@ -1012,7 +999,7 @@ namespace FGEngine
 			VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
 			vertexBuffer, vertexBufferMemory);
 
-		CopyBuffer(logicalDevice, commandPool, stagingBuffer, vertexBuffer, bufferSize);
+		CopyBuffer(logicalDevice, command->GetPool(), stagingBuffer, vertexBuffer, bufferSize);
 
 		vkDestroyBuffer(*logicalDevice, stagingBuffer, nullptr);
 		vkFreeMemory(*logicalDevice, stagingBufferMemory, nullptr);
@@ -1043,7 +1030,7 @@ namespace FGEngine
 			VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
 			indexBuffer, indexBufferMemory);
 
-		CopyBuffer(logicalDevice, commandPool, stagingBuffer, indexBuffer, bufferSize);
+		CopyBuffer(logicalDevice, command->GetPool(), stagingBuffer, indexBuffer, bufferSize);
 
 		vkDestroyBuffer(*logicalDevice, stagingBuffer, nullptr);
 		vkFreeMemory(*logicalDevice, stagingBufferMemory, nullptr);
@@ -1134,20 +1121,6 @@ namespace FGEngine
 				writeDescriptorSets.data(),
 				0, nullptr);
 		}
-	}
-
-	void VulkanRendererAPI::CreateCommandBuffers()
-	{
-		commandBuffers.resize(MAX_FRAMES_IN_FLIGHT);
-
-		VkCommandBufferAllocateInfo allocateInfo{};
-		allocateInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-		allocateInfo.commandPool = commandPool;
-		allocateInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-		allocateInfo.commandBufferCount = (uint32_t)commandBuffers.size();
-
-		VkResult result = vkAllocateCommandBuffers(*logicalDevice, &allocateInfo, commandBuffers.data());
-		Check(result == VK_SUCCESS, "Failed to allocate command buffers. Vulkan error: %d", result);
 	}
 
 	void VulkanRendererAPI::CreateSyncObjects()
