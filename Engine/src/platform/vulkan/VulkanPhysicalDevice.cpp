@@ -212,6 +212,11 @@ namespace FGEngine
 		vkGetPhysicalDeviceProperties(physicalDevice, &properties);
 		LogInfo("Device Name: %s", properties.deviceName);
 
+		Refresh(vulkanInstance);
+	}
+
+	void VulkanPhysicalDevice::Refresh(const VulkanInstance* vulkanInstance)
+	{
 		swapChainSupportDetails = QuerySwapChainSupport(physicalDevice, vulkanInstance->GetSurface());
 		queueFamilyIndices = FindQueueFamilies(physicalDevice, vulkanInstance->GetSurface());
 		maxSampleCount = GetMaxUsableSampleCount(physicalDevice);

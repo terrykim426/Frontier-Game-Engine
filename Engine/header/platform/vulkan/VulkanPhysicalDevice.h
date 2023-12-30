@@ -13,6 +13,8 @@ namespace FGEngine
 	public:
 		VulkanPhysicalDevice(const VulkanInstance* vulkanInstance, const std::vector<const char*>& deviceExtensions);
 
+		void Refresh(const VulkanInstance* vulkanInstance);
+
 		operator VkPhysicalDevice_T* () const { return physicalDevice; }
 		const QueueFamilyIndices GetQueueFamilyIndices() const { return queueFamilyIndices; }
 		const SwapChainSupportDetails GetSwapChainSupportDetails() const { return swapChainSupportDetails; }

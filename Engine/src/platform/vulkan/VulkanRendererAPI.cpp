@@ -1203,6 +1203,8 @@ namespace FGEngine
 
 		vkDeviceWaitIdle(*logicalDevice);
 
+		physicalDevice->Refresh(vulkanInstance);
+
 		CleanUpSwapChain();
 
 		swapChain->Recreate(vulkanInstance, physicalDevice, nativeWindow);
