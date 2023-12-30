@@ -99,6 +99,12 @@
     <ClInclude Include="header\platform\vulkan\VulkanLogicalDevice.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="header\platform\vulkan\VulkanSwapChain.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="header\platform\vulkan\VulkanUtil.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="dllmain.cpp">
@@ -153,6 +159,12 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="src\platform\vulkan\VulkanLogicalDevice.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\platform\vulkan\VulkanSwapChain.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\platform\vulkan\VulkanUtil.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>

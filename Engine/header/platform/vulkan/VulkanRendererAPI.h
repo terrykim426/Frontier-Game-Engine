@@ -22,6 +22,7 @@ namespace FGEngine
 	class VulkanInstance;
 	class VulkanPhysicalDevice;
 	class VulkanLogicalDevice;
+	class VulkanSwapChain;
 
 	class VulkanRendererAPI : public IRendererAPI
 	{
@@ -42,12 +43,9 @@ namespace FGEngine
 		static bool IsSupported();
 
 	private:
-		void CreateSwapChain();
-		void CreateImageViews();
 		void CreateRenderPass();
 		void CreateDescriptorSetLayout();
 		void CreateGraphicsPipeline();
-		void CreateFrameBuffers();
 		void CreateCommandPool();
 		void CreateImage(uint32_t width, uint32_t height, uint32_t mipLevels, VkSampleCountFlagBits numSamples, VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage, VkMemoryPropertyFlags properties, VkImage& image, VkDeviceMemory& imageMemory);
 		void CreateColorResources();
@@ -77,8 +75,8 @@ namespace FGEngine
 		VulkanInstance* vulkanInstance;
 		VulkanPhysicalDevice* physicalDevice;
 		VulkanLogicalDevice* logicalDevice;
+		VulkanSwapChain* swapChain;
 
-		VkSwapchainKHR swapChain;
 		VkRenderPass renderPass;
 		VkDescriptorSetLayout descriptorSetLayout;
 		VkDescriptorPool descriptorPool;
@@ -96,11 +94,6 @@ namespace FGEngine
 		std::vector<VkDeviceMemory> uniformBuffersMemory;
 		std::vector<void*> uniformBuffersMapped;
 
-		std::vector<VkImage> swapChainImages;
-		std::vector<VkImageView> swapChainImageViews;
-		std::vector<VkFramebuffer> swapChainFrameBuffers;
-		VkFormat swapChainImageFormat;
-		VkExtent2D swapChainExtent;
 
 		VkClearColorValue clearColor;
 		std::vector<VkSemaphore> imageAvailableSemaphores;

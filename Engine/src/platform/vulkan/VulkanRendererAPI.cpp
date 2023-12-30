@@ -4,6 +4,7 @@
 #include "platform/vulkan/VulkanInstance.h"
 #include "platform/vulkan/VulkanPhysicalDevice.h"
 #include "platform/vulkan/VulkanLogicalDevice.h"
+#include "platform/vulkan/VulkanSwapChain.h"
 
 #include "core/Logger.h"
 #include "renderer/Texture.h"
@@ -22,55 +23,6 @@
 
 namespace FGEngine
 {
-#pragma region Swap Chain Support Details
-	static VkSurfaceFormatKHR ChooseSwapSurfaceFormat(const std::vector<VkSurfaceFormatKHR>& availableSurfaceFormats)
-	{
-		Check(availableSurfaceFormats.size() > 0, "No surface format available!");
-
-		for (const VkSurfaceFormatKHR& surfaceFormat : availableSurfaceFormats)
-		{
-			if (surfaceFormat.format == VK_FORMAT_B8G8R8A8_SRGB && surfaceFormat.colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR)
-			{
-				return surfaceFormat;
-			}
-		}
-
-		// can't find suitable one, just return the first one
-		return availableSurfaceFormats[0];
-	}
-
-	static VkPresentModeKHR ChooseSwapPresentMode(const std::vector<VkPresentModeKHR>& availablePresentModes)
-	{
-		Check(availablePresentModes.size() > 0, "No present mode available!");
-
-		for (const VkPresentModeKHR& presentMode : availablePresentModes)
-		{
-			// mailbox uses more energy but less latency as it try to use most up-to-date buffer 
-			if (presentMode == VK_PRESENT_MODE_MAILBOX_KHR)
-			{
-				return presentMode;
-			}
-		}
-
-		// similar to vsync
-		return VK_PRESENT_MODE_FIFO_KHR;
-	}
-
-	static VkExtent2D ChooseSwapExtent(const VkSurfaceCapabilitiesKHR& capabilities, uint32_t windowWidth, uint32_t windowHeight)
-	{
-		if (capabilities.currentExtent.width != (std::numeric_limits<uint32_t>::max)()) // NOTE: the "max" is conflicting with the max marco, hence its used this way
-		{
-			return capabilities.currentExtent;
-		}
-
-		VkExtent2D actualExtent{};
-		actualExtent.width = std::clamp(windowWidth, capabilities.minImageExtent.width, capabilities.maxImageExtent.width);
-		actualExtent.height = std::clamp(windowHeight, capabilities.minImageExtent.height, capabilities.maxImageExtent.height);
-
-		return actualExtent;
-	}
-#pragma endregion
-
 #pragma region shader
 	static VkShaderModule CreateShaderModule(VkDevice device, const std::vector<char>& code)
 	{
@@ -432,8 +384,7 @@ namespace FGEngine
 
 		logicalDevice = new VulkanLogicalDevice(vulkanInstance, physicalDevice, deviceExtensions);
 
-		CreateSwapChain();
-		CreateImageViews();
+		swapChain = new VulkanSwapChain(vulkanInstance, physicalDevice, logicalDevice, nativeWindow);
 
 		CreateRenderPass();
 		CreateDescriptorSetLayout();
@@ -441,7 +392,9 @@ namespace FGEngine
 
 		CreateColorResources();
 		CreateDepthResources();
-		CreateFrameBuffers();
+
+		swapChain->CreateFrameBuffers(colorImageView, depthImageView, renderPass);
+
 		CreateCommandPool();
 		CreateTextureImage();
 		CreateTextureImageView();
@@ -494,6 +447,7 @@ namespace FGEngine
 		vkDestroyPipelineLayout(*logicalDevice, pipelineLayout, nullptr);
 		vkDestroyRenderPass(*logicalDevice, renderPass, nullptr);
 
+		delete swapChain;
 		delete logicalDevice;
 		delete physicalDevice;
 		delete vulkanInstance;
@@ -513,7 +467,7 @@ namespace FGEngine
 		vkWaitForFences(*logicalDevice, 1, &inFlightFences[currentFrame], VK_TRUE, UINT64_MAX);
 
 		uint32_t imageIndex;
-		VkResult result = vkAcquireNextImageKHR(*logicalDevice, swapChain, UINT64_MAX, imageAvailableSemaphores[currentFrame], VK_NULL_HANDLE, &imageIndex);
+		VkResult result = vkAcquireNextImageKHR(*logicalDevice, *swapChain, UINT64_MAX, imageAvailableSemaphores[currentFrame], VK_NULL_HANDLE, &imageIndex);
 		if (result == VK_ERROR_OUT_OF_DATE_KHR)
 		{
 			RecreateSwapChain();
@@ -544,7 +498,7 @@ namespace FGEngine
 		result = vkQueueSubmit(logicalDevice->GetGraphicsQueue(), 1, &submitInfo, inFlightFences[currentFrame]);
 		Check(result == VK_SUCCESS, "Failed to submit draw command buffer. Vulkan error: %d", result);
 
-		VkSwapchainKHR swapChains[] = { swapChain };
+		VkSwapchainKHR swapChains[] = { *swapChain };
 		VkPresentInfoKHR presentInfo{};
 		presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
 		presentInfo.waitSemaphoreCount = 1;
@@ -599,99 +553,10 @@ namespace FGEngine
 		return glfwVulkanSupported();
 	}
 
-	void VulkanRendererAPI::CreateSwapChain()
-	{
-		SwapChainSupportDetails supportDetails = physicalDevice->GetSwapChainSupportDetails();
-		int width, height;
-		glfwGetFramebufferSize(nativeWindow, &width, &height);
-
-		VkSurfaceFormatKHR surfaceFormat = ChooseSwapSurfaceFormat(supportDetails.surfaceFormats);
-		VkPresentModeKHR presentMode = ChooseSwapPresentMode(supportDetails.presentModes);
-		VkExtent2D extent = ChooseSwapExtent(supportDetails.capabilities, static_cast<uint32_t>(width), static_cast<uint32_t>(height));
-
-		unsigned imageCount = [&] {
-			/* if maxImageCount is zero, it means there's no maximum.
-			*  if that's the case just use the min, with 1 more additional,
-			*  to reduce the chance of waiting for the driver to complete its instructions
-			*
-			*  ref: https://vulkan-tutorial.com/Drawing_a_triangle/Presentation/Swap_chain#:~:text=by%20the%20implementation.-,Creating%20the%20swap%20chain,-Now%20that%20we
-			*/
-			if (supportDetails.capabilities.maxImageCount == 0)
-			{
-				return supportDetails.capabilities.minImageCount + 1;
-			}
-			else
-			{
-				return supportDetails.capabilities.maxImageCount;
-			}
-		}();
-
-		VkSwapchainCreateInfoKHR createInfo{};
-		createInfo.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
-		createInfo.surface = vulkanInstance->GetSurface();
-		createInfo.minImageCount = imageCount;
-		createInfo.imageFormat = surfaceFormat.format;
-		createInfo.imageColorSpace = surfaceFormat.colorSpace;
-		createInfo.imageExtent = extent;
-		createInfo.imageArrayLayers = 1; // this is always 1, unless it is developing for stereoscopic 3D application
-		createInfo.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT; // render directly. If want to render to a separate image, use VK_IMAGE_USAGE_TRANSFER_DST_BIT instead.
-
-
-		QueueFamilyIndices indices = physicalDevice->GetQueueFamilyIndices();
-		if (indices.graphicsFamily != indices.presentFamily)
-		{
-			uint32_t queueFamilyIndices[]
-			{
-				indices.graphicsFamily.value(),
-				indices.presentFamily.value()
-			};
-
-			createInfo.imageSharingMode = VK_SHARING_MODE_CONCURRENT;
-			createInfo.queueFamilyIndexCount = 2;
-			createInfo.pQueueFamilyIndices = queueFamilyIndices;
-		}
-		else
-		{
-			createInfo.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
-			createInfo.queueFamilyIndexCount = 0;
-			createInfo.pQueueFamilyIndices = nullptr;
-		}
-
-		createInfo.preTransform = supportDetails.capabilities.currentTransform;
-		createInfo.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
-		createInfo.presentMode = presentMode;
-		createInfo.clipped = VK_TRUE;
-		createInfo.oldSwapchain = VK_NULL_HANDLE;
-
-		VkResult result = vkCreateSwapchainKHR(*logicalDevice, &createInfo, nullptr, &swapChain);
-		Check(result == VK_SUCCESS, "Failed to create swap chain. Vulkan error: %d", result);
-
-		uint32_t swapChainImageCount;
-		vkGetSwapchainImagesKHR(*logicalDevice, swapChain, &swapChainImageCount, nullptr);
-		if (swapChainImageCount > 0)
-		{
-			swapChainImages.resize(swapChainImageCount);
-			vkGetSwapchainImagesKHR(*logicalDevice, swapChain, &swapChainImageCount, swapChainImages.data());
-		}
-
-		swapChainImageFormat = surfaceFormat.format;
-		swapChainExtent = extent;
-	}
-
-	void VulkanRendererAPI::CreateImageViews()
-	{
-		swapChainImageViews.resize(swapChainImages.size());
-
-		for (size_t i = 0; i < swapChainImages.size(); i++)
-		{
-			swapChainImageViews[i] = CreateImageView(*logicalDevice, swapChainImages[i], swapChainImageFormat, VK_IMAGE_ASPECT_COLOR_BIT, 1);
-		}
-	}
-
 	void VulkanRendererAPI::CreateRenderPass()
 	{
 		VkAttachmentDescription colorAttachmentDescription{};
-		colorAttachmentDescription.format = swapChainImageFormat;
+		colorAttachmentDescription.format = swapChain->GetImageFormat();
 		colorAttachmentDescription.samples = msaaSamples;
 		colorAttachmentDescription.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
 		colorAttachmentDescription.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
@@ -719,7 +584,7 @@ namespace FGEngine
 		depthAttachmentRef.layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
 
 		VkAttachmentDescription colorAttachmentResolve{};
-		colorAttachmentResolve.format = swapChainImageFormat;
+		colorAttachmentResolve.format = swapChain->GetImageFormat();
 		colorAttachmentResolve.samples = VK_SAMPLE_COUNT_1_BIT;
 		colorAttachmentResolve.loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
 		colorAttachmentResolve.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
@@ -937,32 +802,6 @@ namespace FGEngine
 		vkDestroyShaderModule(*logicalDevice, fragShaderModule, nullptr);
 	}
 
-	void VulkanRendererAPI::CreateFrameBuffers()
-	{
-		swapChainFrameBuffers.resize(swapChainImageViews.size());
-
-		for (size_t i = 0; i < swapChainImageViews.size(); i++)
-		{
-			std::array<VkImageView, 3> attachments = {
-				colorImageView,
-				depthImageView,
-				swapChainImageViews[i]
-			};
-
-			VkFramebufferCreateInfo createInfo{};
-			createInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
-			createInfo.renderPass = renderPass;
-			createInfo.attachmentCount = static_cast<uint32_t>(attachments.size());
-			createInfo.pAttachments = attachments.data();
-			createInfo.width = swapChainExtent.width;
-			createInfo.height = swapChainExtent.height;
-			createInfo.layers = 1;
-
-			VkResult result = vkCreateFramebuffer(*logicalDevice, &createInfo, nullptr, &swapChainFrameBuffers[i]);
-			Check(result == VK_SUCCESS, "Failed to create frame buffer %d. Vulkan error: %d", i, result);
-		}
-	}
-
 	void VulkanRendererAPI::CreateCommandPool()
 	{
 		QueueFamilyIndices queueFamilyIndices = physicalDevice->GetQueueFamilyIndices();
@@ -1017,9 +856,9 @@ namespace FGEngine
 
 	void VulkanRendererAPI::CreateColorResources()
 	{
-		VkFormat colorFormat = swapChainImageFormat;
+		VkFormat colorFormat = swapChain->GetImageFormat();
 
-		CreateImage(swapChainExtent.width, swapChainExtent.height, 1,
+		CreateImage(swapChain->GetExtent().width, swapChain->GetExtent().height, 1,
 			msaaSamples, colorFormat, VK_IMAGE_TILING_OPTIMAL,
 			VK_IMAGE_USAGE_TRANSIENT_ATTACHMENT_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
 			VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
@@ -1031,7 +870,7 @@ namespace FGEngine
 	void VulkanRendererAPI::CreateDepthResources()
 	{
 		VkFormat depthFormat = FindDepthFormat(*physicalDevice);
-		CreateImage(swapChainExtent.width, swapChainExtent.height, 1,
+		CreateImage(swapChain->GetExtent().width, swapChain->GetExtent().height, 1,
 			msaaSamples, depthFormat, VK_IMAGE_TILING_OPTIMAL,
 			VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
 			VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
@@ -1351,10 +1190,6 @@ namespace FGEngine
 		vkDestroyImageView(*logicalDevice, depthImageView, nullptr);
 		vkDestroyImage(*logicalDevice, depthImage, nullptr);
 		vkFreeMemory(*logicalDevice, depthImageMemory, nullptr);
-
-		VectorDestroy(vkDestroyFramebuffer, *logicalDevice, swapChainFrameBuffers, nullptr);
-		VectorDestroy(vkDestroyImageView, *logicalDevice, swapChainImageViews, nullptr);
-		vkDestroySwapchainKHR(*logicalDevice, swapChain, nullptr);
 	}
 
 	void VulkanRendererAPI::RecreateSwapChain()
@@ -1370,11 +1205,12 @@ namespace FGEngine
 
 		CleanUpSwapChain();
 
-		CreateSwapChain();
-		CreateImageViews();
+		swapChain->Recreate(vulkanInstance, physicalDevice, nativeWindow);
+
 		CreateColorResources();
 		CreateDepthResources();
-		CreateFrameBuffers();
+
+		swapChain->CreateFrameBuffers(colorImageView, depthImageView, renderPass);
 	}
 
 	void VulkanRendererAPI::UpdateUniformBuffer(uint32_t currentImage)
@@ -1387,7 +1223,7 @@ namespace FGEngine
 		UniformBufferObject ubo{};
 		ubo.model = glm::rotate(glm::mat4(1.0f), time * glm::radians(90.0f), glm::vec3(0, 0, 1));
 		ubo.view = glm::lookAt(glm::vec3(2, 2, 2), glm::vec3(0, 0, 0), glm::vec3(0, 0, 1));
-		ubo.projection = glm::perspective(glm::radians(45.0f), swapChainExtent.width / (float)swapChainExtent.height, 0.1f, 10.0f);
+		ubo.projection = glm::perspective(glm::radians(45.0f), swapChain->GetExtent().width / (float)swapChain->GetExtent().height, 0.1f, 10.0f);
 		ubo.projection[1][1] *= -1; // flip y-axis
 
 		memcpy(uniformBuffersMapped[currentImage], &ubo, sizeof(ubo));
@@ -1410,9 +1246,9 @@ namespace FGEngine
 		VkRenderPassBeginInfo renderPassBeginInfo{};
 		renderPassBeginInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
 		renderPassBeginInfo.renderPass = renderPass;
-		renderPassBeginInfo.framebuffer = swapChainFrameBuffers[imageIndex];
+		renderPassBeginInfo.framebuffer = swapChain->GetFrameBuffer(imageIndex);
 		renderPassBeginInfo.renderArea.offset = { 0,0 };
-		renderPassBeginInfo.renderArea.extent = swapChainExtent;
+		renderPassBeginInfo.renderArea.extent = swapChain->GetExtent();
 		renderPassBeginInfo.clearValueCount = static_cast<uint32_t>(clearValues.size());
 		renderPassBeginInfo.pClearValues = clearValues.data();
 
@@ -1423,8 +1259,8 @@ namespace FGEngine
 			VkViewport viewport{};
 			viewport.x = 0;
 			viewport.y = 0;
-			viewport.width = static_cast<float>(swapChainExtent.width);
-			viewport.height = static_cast<float>(swapChainExtent.height);
+			viewport.width = static_cast<float>(swapChain->GetExtent().width);
+			viewport.height = static_cast<float>(swapChain->GetExtent().height);
 			viewport.minDepth = 0.0f;
 			viewport.maxDepth = 1.0f;
 
@@ -1432,7 +1268,7 @@ namespace FGEngine
 
 			VkRect2D scissor{};
 			scissor.offset = { 0,0 };
-			scissor.extent = swapChainExtent;
+			scissor.extent = swapChain->GetExtent();
 
 			vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
 
