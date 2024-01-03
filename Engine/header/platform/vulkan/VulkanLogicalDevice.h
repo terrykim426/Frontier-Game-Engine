@@ -1,7 +1,6 @@
 #pragma once
 
-struct VkDevice_T;
-struct VkQueue_T;
+#include "vulkan/vulkan_core.h"
 
 namespace FGEngine
 {
@@ -14,15 +13,15 @@ namespace FGEngine
 		VulkanLogicalDevice(const std::shared_ptr<VulkanInstance>& vulkanInstance, const std::shared_ptr<VulkanPhysicalDevice>& physicalDevice, const std::vector<const char*>& deviceExtensions);
 		~VulkanLogicalDevice();
 
-		operator VkDevice_T* () const { return device; }
+		operator VkDevice () const { return device; }
 
-		VkQueue_T* GetGraphicsQueue() const { return graphicsQueue; }
-		VkQueue_T* GetPresentQueue() const { return presentQueue; }
+		VkQueue GetGraphicsQueue() const { return graphicsQueue; }
+		VkQueue GetPresentQueue() const { return presentQueue; }
 
 	private:
-		VkDevice_T* device;
-		VkQueue_T* graphicsQueue;
-		VkQueue_T* presentQueue;
+		VkDevice device;
+		VkQueue graphicsQueue;
+		VkQueue presentQueue;
 	};
 }
 

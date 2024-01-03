@@ -6,10 +6,12 @@
 #include "platform/vulkan/VulkanLogicalDevice.h"
 #include "platform/vulkan/VulkanSwapChain.h"
 #include "platform/vulkan/VulkanCommand.h"
+#include "platform/vulkan/VulkanShaderModule.h"
 
 #include "core/Logger.h"
 #include "renderer/Texture.h"
 #include "renderer/Model.h"
+#include "renderer/Shader.h"
 
 #include <algorithm>
 #include <fstream>
@@ -24,21 +26,6 @@
 
 namespace FGEngine
 {
-#pragma region shader
-	static VkShaderModule CreateShaderModule(VkDevice device, const std::vector<char>& code)
-	{
-		VkShaderModuleCreateInfo createInfo{};
-		createInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
-		createInfo.codeSize = code.size();
-		createInfo.pCode = reinterpret_cast<const uint32_t*>(code.data());
-
-		VkShaderModule shaderModule;
-		VkResult result = vkCreateShaderModule(device, &createInfo, nullptr, &shaderModule);
-
-		return shaderModule;
-	}
-#pragma endregion
-
 #pragma	region	Utility
 	static std::vector<char> ReadFile(const std::string& filename)
 	{
@@ -658,27 +645,15 @@ namespace FGEngine
 
 	void VulkanRendererAPI::CreateGraphicsPipeline()
 	{
-		std::vector<char> vertShaderCode = ReadFile("shader/TestShaderVert.spv");
-		std::vector<char> fragShaderCode = ReadFile("shader/TestShaderFrag.spv");
+		Shader vertShader("shader/TestShaderVert.spv", Shader::EType::Vertex);
+		Shader fragShader("shader/TestShaderFrag.spv", Shader::EType::Fragment);
 
-		VkShaderModule vertShaderModule = CreateShaderModule(*logicalDevice, vertShaderCode);
-		VkShaderModule fragShaderModule = CreateShaderModule(*logicalDevice, fragShaderCode);
-
-		VkPipelineShaderStageCreateInfo vertCreateInfo{};
-		vertCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-		vertCreateInfo.stage = VK_SHADER_STAGE_VERTEX_BIT;
-		vertCreateInfo.module = vertShaderModule;
-		vertCreateInfo.pName = "main";
-
-		VkPipelineShaderStageCreateInfo fragCreateInfo{};
-		fragCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-		fragCreateInfo.stage = VK_SHADER_STAGE_FRAGMENT_BIT;
-		fragCreateInfo.module = fragShaderModule;
-		fragCreateInfo.pName = "main";
+		VulkanShaderModule vertShaderModule(logicalDevice, vertShader);
+		VulkanShaderModule fragShaderModule(logicalDevice, fragShader);
 
 		VkPipelineShaderStageCreateInfo shaderStages[] = {
-			vertCreateInfo,
-			fragCreateInfo
+			vertShaderModule.GetCreateInfo(),
+			fragShaderModule.GetCreateInfo()
 		};
 
 		auto bindingDescription = VertexHelper::GetBindingDescription();
@@ -793,10 +768,6 @@ namespace FGEngine
 
 		result = vkCreateGraphicsPipelines(*logicalDevice, VK_NULL_HANDLE, 1, &pipelineCreateInfo, nullptr, &graphicsPipeline);
 		Check(result == VK_SUCCESS, "Failed to create graphics pipeline. Vulkan error: %d", result);
-
-
-		vkDestroyShaderModule(*logicalDevice, vertShaderModule, nullptr);
-		vkDestroyShaderModule(*logicalDevice, fragShaderModule, nullptr);
 	}
 
 	void VulkanRendererAPI::CreateImage(uint32_t width, uint32_t height, uint32_t mipLevels,

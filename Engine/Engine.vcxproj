@@ -178,8 +178,11 @@
     <ClInclude Include="header\platform\vulkan\VulkanSwapChain.h" />
     <ClInclude Include="header\platform\vulkan\VulkanUtil.h" />
     <ClInclude Include="header\platform\vulkan\VulkanCommand.h" />
+    <ClInclude Include="header\renderer\Shader.h" />
+    <ClInclude Include="header\platform\vulkan\VulkanShaderModule.h" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="src\renderer\Shader.cpp" />
     <ClCompile Include="src\renderer\Mesh.cpp" />
     <ClCompile Include="src\renderer\Model.cpp" />
     <ClCompile Include="src\platform\openGL\OpenGLRendererAPI.cpp" />
@@ -206,6 +209,7 @@
     <ClCompile Include="src\platform\vulkan\VulkanSwapChain.cpp" />
     <ClCompile Include="src\platform\vulkan\VulkanUtil.cpp" />
     <ClCompile Include="src\platform\vulkan\VulkanCommand.cpp" />
+    <ClCompile Include="src\platform\vulkan\VulkanShaderModule.cpp" />
   </ItemGroup>
   <ItemGroup>
     <None Include="shader\TestShader.frag" />
