@@ -398,10 +398,11 @@ namespace FGEngine
 
 		command = std::make_shared<VulkanCommand>(physicalDevice, logicalDevice, MAX_FRAMES_IN_FLIGHT);
 
-		CreateTextureImage();
+		LoadModel();
+
+		CreateTextureImage(*model->GetTexture());
 		CreateTextureImageView();
 		CreateTextureSampler();
-		LoadModel();
 		CreateVertexBuffer();
 		CreateIndexBuffer();
 		CreateUniformBuffer();
@@ -862,10 +863,8 @@ namespace FGEngine
 		depthImageView = CreateImageView(*logicalDevice, depthImage, depthFormat, VK_IMAGE_ASPECT_DEPTH_BIT, 1);
 	}
 
-	void VulkanRendererAPI::CreateTextureImage()
+	void VulkanRendererAPI::CreateTextureImage(const Texture& texture)
 	{
-		//Texture texture = Texture("texture/texture.jpg");
-		Texture texture = Texture("model/viking_room/viking_room.png");
 		VkDeviceSize imageSize = texture.GetWidth() * texture.GetHeight() * 4;
 		mipLevels = static_cast<uint32_t>(std::floor(std::log2(std::max(texture.GetWidth(), texture.GetHeight())))) + 1;
 
@@ -941,7 +940,10 @@ namespace FGEngine
 	void VulkanRendererAPI::LoadModel()
 	{
 		//model = Model::GenerateQuad();
+		//Texture texture = Texture("texture/texture.jpg");
+
 		model = new Model("model/viking_room/viking_room.obj");
+		model->SetTexture(Texture("model/viking_room/viking_room.png"));
 	}
 
 	void VulkanRendererAPI::CreateBuffer(

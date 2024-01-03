@@ -47,10 +47,35 @@ namespace FGEngine
 		}
 	}
 
-	const Mesh* Model::GetMesh(int index) const
+	const Mesh* Model::GetMesh(uint32_t index) const
 	{
-		if (index < 0) return nullptr;
 		if (index >= meshes.size()) return nullptr;
 		return &meshes[index];
+	}
+
+	void Model::SetTexture(const Texture& texture, uint32_t index)
+	{
+		if (textures.size() <= index)
+		{
+			textures.resize(index + 1);
+		}
+
+		textures[index] = texture;
+	}
+
+	void Model::SetTexture(Texture&& texture, uint32_t index)
+	{
+		if (textures.size() <= index)
+		{
+			textures.resize(index + 1);
+		}
+
+		textures[index] = std::move(texture);
+	}
+
+	const Texture* Model::GetTexture(uint32_t index) const
+	{
+		if (index >= textures.size()) return nullptr;
+		return &textures[index];
 	}
 }

@@ -26,6 +26,8 @@ namespace FGEngine
 	class VulkanSwapChain;
 	class VulkanCommand;
 
+	class Texture;
+
 	class VulkanRendererAPI : public IRendererAPI
 	{
 	public:
@@ -51,7 +53,7 @@ namespace FGEngine
 		void CreateImage(uint32_t width, uint32_t height, uint32_t mipLevels, VkSampleCountFlagBits numSamples, VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage, VkMemoryPropertyFlags properties, VkImage& image, VkDeviceMemory& imageMemory);
 		void CreateColorResources();
 		void CreateDepthResources();
-		void CreateTextureImage();
+		void CreateTextureImage(const Texture& texture);
 		void CreateTextureImageView();
 		void CreateTextureSampler();
 		void LoadModel();
