@@ -7,11 +7,16 @@
 
 namespace FGEngine
 {
+	class VulkanPhysicalDevice;
 	class VulkanLogicalDevice;
 
 	class VulkanUtil
 	{
 	public:
+		static void CreateImage(const std::shared_ptr<VulkanPhysicalDevice>& physicalDevice, const std::shared_ptr<VulkanLogicalDevice>& logicalDevice, 
+			uint32_t width, uint32_t height, uint32_t mipLevels,
+			VkSampleCountFlagBits numSamples, VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage,
+			VkMemoryPropertyFlags properties, VkImage& image, VkDeviceMemory& imageMemory);
 		static VkImageView CreateImageView(const std::shared_ptr<VulkanLogicalDevice>& device, VkImage image, VkFormat format, VkImageAspectFlags aspectFlags, uint32_t mipLevels);
 
 

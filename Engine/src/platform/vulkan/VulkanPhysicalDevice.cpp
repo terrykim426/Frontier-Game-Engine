@@ -222,4 +222,51 @@ namespace FGEngine
 		queueFamilyIndices = FindQueueFamilies(physicalDevice, vulkanInstance->GetSurface());
 		maxSampleCount = GetMaxUsableSampleCount(physicalDevice);
 	}
+
+	uint32_t VulkanPhysicalDevice::FindMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties) const
+	{
+		VkPhysicalDeviceMemoryProperties memoryProperties;
+		vkGetPhysicalDeviceMemoryProperties(physicalDevice, &memoryProperties);
+
+		for (uint32_t i = 0; i < memoryProperties.memoryTypeCount; i++)
+		{
+			if (!(typeFilter & (1 << i))) continue;
+
+			if ((memoryProperties.memoryTypes[i].propertyFlags & properties) == properties)
+			{
+				return i;
+			}
+		}
+
+		NoEntry("Failed to find suitable memory type");
+	}
+
+	VkFormat VulkanPhysicalDevice::FindSupportedFormat(const std::vector<VkFormat>& candidates, VkImageTiling tiling, VkFormatFeatureFlags features) const
+	{
+		for (VkFormat format : candidates)
+		{
+			VkFormatProperties properties;
+			vkGetPhysicalDeviceFormatProperties(physicalDevice, format, &properties);
+
+			if (tiling == VK_IMAGE_TILING_LINEAR && (properties.linearTilingFeatures & features) == features)
+			{
+				return format;
+			}
+			else if (tiling == VK_IMAGE_TILING_OPTIMAL && (properties.optimalTilingFeatures & features) == features)
+			{
+				return format;
+			}
+		}
+
+		NoEntry("Failed to find supported format!");
+		return VK_FORMAT_UNDEFINED;
+	}
+
+	VkFormat VulkanPhysicalDevice::FindDepthFormat() const
+	{
+		return FindSupportedFormat(
+			{ VK_FORMAT_D32_SFLOAT, VK_FORMAT_D32_SFLOAT_S8_UINT, VK_FORMAT_D24_UNORM_S8_UINT },
+			VK_IMAGE_TILING_OPTIMAL,
+			VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT);
+	}
 }

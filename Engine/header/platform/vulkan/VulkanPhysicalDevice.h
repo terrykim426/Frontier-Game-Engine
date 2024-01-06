@@ -2,9 +2,9 @@
 
 #include "platform/vulkan/VulkanDefineType.h"
 
-#include <memory>
+#include "vulkan/vulkan_core.h"
 
-struct VkPhysicalDevice_T;
+#include <memory>
 
 namespace FGEngine
 {
@@ -17,13 +17,17 @@ namespace FGEngine
 
 		void Refresh(const std::shared_ptr<VulkanInstance>& vulkanInstance);
 
-		operator VkPhysicalDevice_T* () const { return physicalDevice; }
+		uint32_t FindMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties) const;
+		VkFormat FindSupportedFormat(const std::vector<VkFormat>& candidates, VkImageTiling tiling, VkFormatFeatureFlags features) const;
+		VkFormat FindDepthFormat() const;
+
+		operator VkPhysicalDevice () const { return physicalDevice; }
 		const QueueFamilyIndices GetQueueFamilyIndices() const { return queueFamilyIndices; }
 		const SwapChainSupportDetails GetSwapChainSupportDetails() const { return swapChainSupportDetails; }
 		VkSampleCountFlagBits GetMaxSampleCount() const { return maxSampleCount; }
 
 	private:
-		VkPhysicalDevice_T* physicalDevice;
+		VkPhysicalDevice physicalDevice;
 		QueueFamilyIndices queueFamilyIndices;
 		SwapChainSupportDetails swapChainSupportDetails;
 		VkSampleCountFlagBits maxSampleCount;

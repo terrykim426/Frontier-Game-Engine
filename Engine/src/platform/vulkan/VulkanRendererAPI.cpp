@@ -8,6 +8,8 @@
 #include "platform/vulkan/VulkanPipeline.h"
 #include "platform/vulkan/VulkanCommand.h"
 #include "platform/vulkan/VulkanShaderModule.h"
+#include "platform/vulkan/VulkanImageView.h"
+#include "platform/vulkan/VulkanUtil.h"
 
 #include "core/Logger.h"
 #include "renderer/Texture.h"
@@ -56,53 +58,6 @@ namespace FGEngine
 			DestroyFunc(device, data, callback);
 		}
 		dataVector.clear();
-	}
-
-	static uint32_t FindMemoryType(VkPhysicalDevice phyiscalDevice, uint32_t typeFilter, VkMemoryPropertyFlags properties)
-	{
-		VkPhysicalDeviceMemoryProperties memoryProperties;
-		vkGetPhysicalDeviceMemoryProperties(phyiscalDevice, &memoryProperties);
-
-		for (uint32_t i = 0; i < memoryProperties.memoryTypeCount; i++)
-		{
-			if (!(typeFilter & (1 << i))) continue;
-
-			if ((memoryProperties.memoryTypes[i].propertyFlags & properties) == properties)
-			{
-				return i;
-			}
-		}
-
-		NoEntry("Failed to find suitable memory type");
-	}
-
-	static VkFormat FindSupportedFormat(VkPhysicalDevice physicalDevice, const std::vector<VkFormat>& candidates, VkImageTiling tiling, VkFormatFeatureFlags features)
-	{
-		for (VkFormat format : candidates)
-		{
-			VkFormatProperties properties;
-			vkGetPhysicalDeviceFormatProperties(physicalDevice, format, &properties);
-
-			if (tiling == VK_IMAGE_TILING_LINEAR && (properties.linearTilingFeatures & features) == features)
-			{
-				return format;
-			}
-			else if (tiling == VK_IMAGE_TILING_OPTIMAL && (properties.optimalTilingFeatures & features) == features)
-			{
-				return format;
-			}
-		}
-
-		NoEntry("Failed to find supported format!");
-		return VK_FORMAT_UNDEFINED;
-	}
-
-	static VkFormat FindDepthFormat(VkPhysicalDevice physicalDevice)
-	{
-		return FindSupportedFormat(physicalDevice,
-			{ VK_FORMAT_D32_SFLOAT, VK_FORMAT_D32_SFLOAT_S8_UINT, VK_FORMAT_D24_UNORM_S8_UINT },
-			VK_IMAGE_TILING_OPTIMAL,
-			VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT);
 	}
 
 	static bool HasStencilComponent(VkFormat format)
@@ -240,30 +195,6 @@ namespace FGEngine
 		EndSingleTimeCommands(logicalDevice, commandPool, commandBuffer);
 	}
 
-	VkImageView CreateImageView(VkDevice device, VkImage image, VkFormat format, VkImageAspectFlags aspectFlags, uint32_t mipLevels)
-	{
-		VkImageViewCreateInfo createInfo{};
-		createInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-		createInfo.image = image;
-		createInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
-		createInfo.format = format;
-		createInfo.components.r = VK_COMPONENT_SWIZZLE_IDENTITY;
-		createInfo.components.g = VK_COMPONENT_SWIZZLE_IDENTITY;
-		createInfo.components.b = VK_COMPONENT_SWIZZLE_IDENTITY;
-		createInfo.components.a = VK_COMPONENT_SWIZZLE_IDENTITY;
-		createInfo.subresourceRange.aspectMask = aspectFlags;
-		createInfo.subresourceRange.baseMipLevel = 0;
-		createInfo.subresourceRange.levelCount = mipLevels;
-		createInfo.subresourceRange.baseArrayLayer = 0;
-		createInfo.subresourceRange.layerCount = 1;
-
-		VkImageView imageView;
-		VkResult result = vkCreateImageView(device, &createInfo, nullptr, &imageView);
-		Check(result == VK_SUCCESS, "Failed to create image view. Vulkan error: %d", result);
-
-		return imageView;
-	}
-
 	void GenerateMipmaps(VkPhysicalDevice physicalDevice, const std::shared_ptr<VulkanLogicalDevice>& logicalDevice, VkCommandPool commandPool, VkImage image, VkFormat imageFormat, int32_t textureWidth, int32_t textureHeight, uint32_t mipLevels)
 	{
 		VkFormatProperties formatProperties;
@@ -394,7 +325,7 @@ namespace FGEngine
 		CreateColorResources();
 		CreateDepthResources();
 
-		swapChain->CreateFrameBuffers(colorImageView, depthImageView, renderPass);
+		swapChain->CreateFrameBuffers(*colorImageView, *depthImageView, renderPass);
 
 		command = std::make_shared<VulkanCommand>(physicalDevice, logicalDevice, MAX_FRAMES_IN_FLIGHT);
 
@@ -429,8 +360,6 @@ namespace FGEngine
 			delete model;
 			model = nullptr;
 		}
-
-		CleanUpSwapChain();
 
 		vkDestroySampler(*logicalDevice, textureSampler, nullptr);
 		vkDestroyImageView(*logicalDevice, textureImageView, nullptr);
@@ -565,7 +494,7 @@ namespace FGEngine
 		colorAttachmentRef.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
 
 		VkAttachmentDescription depthAttachmentDescription{};
-		depthAttachmentDescription.format = FindDepthFormat(*physicalDevice);
+		depthAttachmentDescription.format = physicalDevice->FindDepthFormat();
 		depthAttachmentDescription.samples = msaaSamples;
 		depthAttachmentDescription.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
 		depthAttachmentDescription.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
@@ -654,68 +583,28 @@ namespace FGEngine
 
 	}
 
-	void VulkanRendererAPI::CreateImage(uint32_t width, uint32_t height, uint32_t mipLevels,
-		VkSampleCountFlagBits numSamples, VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage,
-		VkMemoryPropertyFlags properties, VkImage& image, VkDeviceMemory& imageMemory)
-	{
-		VkImageCreateInfo imageCreateInfo{};
-		imageCreateInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
-		imageCreateInfo.imageType = VK_IMAGE_TYPE_2D;
-		imageCreateInfo.extent.width = width;
-		imageCreateInfo.extent.height = height;
-		imageCreateInfo.extent.depth = 1;
-		imageCreateInfo.mipLevels = mipLevels;
-		imageCreateInfo.arrayLayers = 1;
-		imageCreateInfo.format = format;
-		imageCreateInfo.tiling = tiling;
-		imageCreateInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-		imageCreateInfo.usage = usage;
-		imageCreateInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-		imageCreateInfo.samples = numSamples;
-		imageCreateInfo.flags = 0;
-
-		VkResult result = vkCreateImage(*logicalDevice, &imageCreateInfo, nullptr, &image);
-		Check(result == VK_SUCCESS, "Failed to create image. Vulkan error: %d", result);
-
-		VkMemoryRequirements memoryRequirements;
-		vkGetImageMemoryRequirements(*logicalDevice, image, &memoryRequirements);
-
-		VkMemoryAllocateInfo memoryAllocateInfo{};
-		memoryAllocateInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-		memoryAllocateInfo.allocationSize = memoryRequirements.size;
-		memoryAllocateInfo.memoryTypeIndex = FindMemoryType(*physicalDevice,
-			memoryRequirements.memoryTypeBits,
-			properties);
-
-		result = vkAllocateMemory(*logicalDevice, &memoryAllocateInfo, nullptr, &imageMemory);
-		Check(result == VK_SUCCESS, "Failed to allocate image memory. Vulkan error: %d", result);
-
-		vkBindImageMemory(*logicalDevice, image, imageMemory, 0);
-	}
-
 	void VulkanRendererAPI::CreateColorResources()
 	{
-		VkFormat colorFormat = swapChain->GetImageFormat();
+		VulkanImageViewSetting colorImageViewSetting{};
+		colorImageViewSetting.imageFormat = swapChain->GetImageFormat();
+		colorImageViewSetting.msaaSamples = msaaSamples;
+		colorImageViewSetting.imageUsageFlags = VK_IMAGE_USAGE_TRANSIENT_ATTACHMENT_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+		colorImageViewSetting.aspectFlags = VK_IMAGE_ASPECT_COLOR_BIT;
 
-		CreateImage(swapChain->GetExtent().width, swapChain->GetExtent().height, 1,
-			msaaSamples, colorFormat, VK_IMAGE_TILING_OPTIMAL,
-			VK_IMAGE_USAGE_TRANSIENT_ATTACHMENT_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
-			VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-			colorImage, colorImageMemory);
-
-		colorImageView = CreateImageView(*logicalDevice, colorImage, colorFormat, VK_IMAGE_ASPECT_COLOR_BIT, 1);
+		colorImageView.reset();
+		colorImageView = std::make_shared<VulkanImageView>(physicalDevice, logicalDevice, swapChain, colorImageViewSetting);
 	}
 
 	void VulkanRendererAPI::CreateDepthResources()
 	{
-		VkFormat depthFormat = FindDepthFormat(*physicalDevice);
-		CreateImage(swapChain->GetExtent().width, swapChain->GetExtent().height, 1,
-			msaaSamples, depthFormat, VK_IMAGE_TILING_OPTIMAL,
-			VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
-			VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-			depthImage, depthImageMemory);
+		VulkanImageViewSetting depthImageViewSetting{};
+		depthImageViewSetting.imageFormat = physicalDevice->FindDepthFormat();
+		depthImageViewSetting.msaaSamples = msaaSamples;
+		depthImageViewSetting.imageUsageFlags = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
+		depthImageViewSetting.aspectFlags = VK_IMAGE_ASPECT_DEPTH_BIT;
 
-		depthImageView = CreateImageView(*logicalDevice, depthImage, depthFormat, VK_IMAGE_ASPECT_DEPTH_BIT, 1);
+		depthImageView.reset();
+		depthImageView = std::make_shared<VulkanImageView>(physicalDevice, logicalDevice, swapChain, depthImageViewSetting);
 	}
 
 	void VulkanRendererAPI::CreateTextureImage(const Texture& texture)
@@ -737,7 +626,8 @@ namespace FGEngine
 		}
 		vkUnmapMemory(*logicalDevice, stagingBufferMemory);
 
-		CreateImage(texture.GetWidth(), texture.GetHeight(), mipLevels,
+		VulkanUtil::CreateImage(physicalDevice, logicalDevice,
+			texture.GetWidth(), texture.GetHeight(), mipLevels,
 			VK_SAMPLE_COUNT_1_BIT, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_TILING_OPTIMAL,
 			VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
 			VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
@@ -762,7 +652,7 @@ namespace FGEngine
 
 	void VulkanRendererAPI::CreateTextureImageView()
 	{
-		textureImageView = CreateImageView(*logicalDevice, textureImage, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_ASPECT_COLOR_BIT, mipLevels);
+		textureImageView = VulkanUtil::CreateImageView(logicalDevice, textureImage, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_ASPECT_COLOR_BIT, mipLevels);
 	}
 
 	void VulkanRendererAPI::CreateTextureSampler()
@@ -821,7 +711,7 @@ namespace FGEngine
 		VkMemoryAllocateInfo allocateInfo{};
 		allocateInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
 		allocateInfo.allocationSize = memoryRequirements.size;
-		allocateInfo.memoryTypeIndex = FindMemoryType(*physicalDevice, memoryRequirements.memoryTypeBits, properties);
+		allocateInfo.memoryTypeIndex = physicalDevice->FindMemoryType(memoryRequirements.memoryTypeBits, properties);
 
 		// NOTE: shouldn't do allocation for each individual buffer, instead should create a custom allocator
 		// ref: https://vulkan-tutorial.com/Vertex_buffers/Staging_buffer#:~:text=more%20complex%20geometry.-,Conclusion,-It%20should%20be
@@ -1006,17 +896,6 @@ namespace FGEngine
 		}
 	}
 
-	void VulkanRendererAPI::CleanUpSwapChain()
-	{
-		vkDestroyImageView(*logicalDevice, colorImageView, nullptr);
-		vkDestroyImage(*logicalDevice, colorImage, nullptr);
-		vkFreeMemory(*logicalDevice, colorImageMemory, nullptr);
-
-		vkDestroyImageView(*logicalDevice, depthImageView, nullptr);
-		vkDestroyImage(*logicalDevice, depthImage, nullptr);
-		vkFreeMemory(*logicalDevice, depthImageMemory, nullptr);
-	}
-
 	void VulkanRendererAPI::RecreateSwapChain()
 	{
 		int width = 0, height = 0;
@@ -1030,14 +909,12 @@ namespace FGEngine
 
 		physicalDevice->Refresh(vulkanInstance);
 
-		CleanUpSwapChain();
-
 		swapChain->Recreate(vulkanInstance, physicalDevice, nativeWindow);
 
 		CreateColorResources();
 		CreateDepthResources();
 
-		swapChain->CreateFrameBuffers(colorImageView, depthImageView, renderPass);
+		swapChain->CreateFrameBuffers(*colorImageView, *depthImageView, renderPass);
 	}
 
 	void VulkanRendererAPI::UpdateUniformBuffer(uint32_t currentImage)

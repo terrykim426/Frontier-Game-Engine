@@ -23,6 +23,7 @@ namespace FGEngine
 	class VulkanSwapChain;
 	class VulkanPipeline;
 	class VulkanCommand;
+	class VulkanImageView;
 
 	class Texture;
 
@@ -47,7 +48,6 @@ namespace FGEngine
 	private:
 		void CreateRenderPass();
 		void CreateDescriptorSetLayout();
-		void CreateImage(uint32_t width, uint32_t height, uint32_t mipLevels, VkSampleCountFlagBits numSamples, VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage, VkMemoryPropertyFlags properties, VkImage& image, VkDeviceMemory& imageMemory);
 		void CreateColorResources();
 		void CreateDepthResources();
 		void CreateTextureImage(const Texture& texture);
@@ -62,7 +62,6 @@ namespace FGEngine
 		void CreateDescriptorSets();
 		void CreateSyncObjects();
 
-		void CleanUpSwapChain();
 		void RecreateSwapChain();
 
 		void UpdateUniformBuffer(uint32_t currentImage);
@@ -105,13 +104,8 @@ namespace FGEngine
 		VkImageView textureImageView;
 		VkSampler textureSampler;
 
-		VkImage colorImage;
-		VkDeviceMemory colorImageMemory;
-		VkImageView colorImageView;
-
-		VkImage depthImage;
-		VkDeviceMemory depthImageMemory;
-		VkImageView depthImageView;
+		std::shared_ptr<VulkanImageView> colorImageView;
+		std::shared_ptr<VulkanImageView> depthImageView;
 
 		VkSampleCountFlagBits msaaSamples = VK_SAMPLE_COUNT_1_BIT;
 
