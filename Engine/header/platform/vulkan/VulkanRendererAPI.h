@@ -24,6 +24,7 @@ namespace FGEngine
 	class VulkanPipeline;
 	class VulkanCommand;
 	class VulkanImageView;
+	class VulkanTextureImageView;
 
 	class Texture;
 
@@ -50,9 +51,6 @@ namespace FGEngine
 		void CreateDescriptorSetLayout();
 		void CreateColorResources();
 		void CreateDepthResources();
-		void CreateTextureImage(const Texture& texture);
-		void CreateTextureImageView();
-		void CreateTextureSampler();
 		void LoadModel();
 		void CreateBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkBuffer& buffer, VkDeviceMemory& bufferMemory);
 		void CreateVertexBuffer();
@@ -98,11 +96,7 @@ namespace FGEngine
 		std::vector<VkSemaphore> renderFinishedSemaphores;
 		std::vector<VkFence> inFlightFences;
 
-		uint32_t mipLevels;
-		VkImage textureImage;
-		VkDeviceMemory textureImageMemory;
-		VkImageView textureImageView;
-		VkSampler textureSampler;
+		std::shared_ptr<VulkanTextureImageView> textureImageView;
 
 		std::shared_ptr<VulkanImageView> colorImageView;
 		std::shared_ptr<VulkanImageView> depthImageView;

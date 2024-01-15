@@ -29,6 +29,18 @@ namespace FGEngine
 			}
 			dataVector.clear();
 		}
+
+		static bool HasStencilComponent(VkFormat format)
+		{
+			switch (format)
+			{
+			case VK_FORMAT_D32_SFLOAT_S8_UINT:
+			case VK_FORMAT_D24_UNORM_S8_UINT:
+				return true;
+			}
+
+			return false;
+		}
 	};
 
 	struct VertexHelper

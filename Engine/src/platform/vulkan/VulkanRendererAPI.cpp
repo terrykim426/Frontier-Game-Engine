@@ -9,6 +9,7 @@
 #include "platform/vulkan/VulkanCommand.h"
 #include "platform/vulkan/VulkanShaderModule.h"
 #include "platform/vulkan/VulkanImageView.h"
+#include "platform/vulkan/VulkanTextureImageView.h"
 #include "platform/vulkan/VulkanUtil.h"
 
 #include "core/Logger.h"
@@ -16,13 +17,6 @@
 #include "renderer/Model.h"
 #include "renderer/Shader.h"
 
-#include <algorithm>
-#include <fstream>
-#include <limits>
-#include <set>
-#include <array>
-
-#include <filesystem>
 #include <chrono>
 
 #include <glm/gtc/matrix_transform.hpp>
@@ -30,263 +24,6 @@
 
 namespace FGEngine
 {
-#pragma	region	Utility
-	static std::vector<char> ReadFile(const std::string& filename)
-	{
-		std::ifstream file(filename, std::ios::ate | std::ios::binary);	// read from the end, to determine the file size
-
-		if (!file.is_open())
-		{
-			throw std::runtime_error("failed to open file!");
-		}
-
-		size_t fileSize = (size_t)file.tellg();
-		std::vector<char> buffer(fileSize);
-
-		file.seekg(0); // return to beginning
-		file.read(buffer.data(), fileSize);
-		file.close();
-
-		return buffer;
-	}
-
-	template <typename T>
-	static void VectorDestroy(void(*DestroyFunc)(VkDevice, T, const VkAllocationCallbacks*), VkDevice device, std::vector<T>& dataVector, const VkAllocationCallbacks* callback)
-	{
-		for (const T& data : dataVector)
-		{
-			DestroyFunc(device, data, callback);
-		}
-		dataVector.clear();
-	}
-
-	static bool HasStencilComponent(VkFormat format)
-	{
-		switch (format)
-		{
-		case VK_FORMAT_D32_SFLOAT_S8_UINT:
-		case VK_FORMAT_D24_UNORM_S8_UINT:
-			return true;
-		}
-
-		return false;
-	}
-
-	static VkCommandBuffer BeginSingleTimeCommands(const std::shared_ptr<VulkanLogicalDevice>& logicalDevice, VkCommandPool commandPool)
-	{
-		VkCommandBufferAllocateInfo allocateInfo{};
-		allocateInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-		allocateInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-		allocateInfo.commandPool = commandPool;
-		allocateInfo.commandBufferCount = 1;
-
-		VkCommandBuffer commandBuffer;
-		vkAllocateCommandBuffers(*logicalDevice, &allocateInfo, &commandBuffer);
-
-		VkCommandBufferBeginInfo beginInfo{};
-		beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-		beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
-
-		vkBeginCommandBuffer(commandBuffer, &beginInfo);
-
-		return commandBuffer;
-	}
-
-	static void EndSingleTimeCommands(const std::shared_ptr<VulkanLogicalDevice>& logicalDevice, VkCommandPool commandPool, VkCommandBuffer commandBuffer)
-	{
-		vkEndCommandBuffer(commandBuffer);
-
-		VkSubmitInfo submitInfo{};
-		submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-		submitInfo.commandBufferCount = 1;
-		submitInfo.pCommandBuffers = &commandBuffer;
-
-		vkQueueSubmit(logicalDevice->GetGraphicsQueue(), 1, &submitInfo, VK_NULL_HANDLE);
-		vkQueueWaitIdle(logicalDevice->GetGraphicsQueue());
-
-		vkFreeCommandBuffers(*logicalDevice, commandPool, 1, &commandBuffer);
-	}
-
-	static void CopyBuffer(const std::shared_ptr<VulkanLogicalDevice> logicalDevice, VkCommandPool commandPool, VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize size)
-	{
-		VkCommandBuffer commandBuffer = BeginSingleTimeCommands(logicalDevice, commandPool);
-		{
-			VkBufferCopy copyRegion{};
-			copyRegion.srcOffset = 0;
-			copyRegion.dstOffset = 0;
-			copyRegion.size = size;
-
-			vkCmdCopyBuffer(commandBuffer, srcBuffer, dstBuffer, 1, &copyRegion);
-		}
-		EndSingleTimeCommands(logicalDevice, commandPool, commandBuffer);
-	}
-
-	static void TransitionImageLayout(const std::shared_ptr<VulkanLogicalDevice>& logicalDevice, VkCommandPool commandPool, VkImage image, VkFormat format, VkImageLayout oldLayout, VkImageLayout newLayout, uint32_t mipLevels)
-	{
-		VkCommandBuffer commandBuffer = BeginSingleTimeCommands(logicalDevice, commandPool);
-		{
-			VkImageMemoryBarrier barrier{};
-			barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-			barrier.oldLayout = oldLayout;
-			barrier.newLayout = newLayout;
-			barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-			barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-			barrier.image = image;
-			barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-			barrier.subresourceRange.baseMipLevel = 0;
-			barrier.subresourceRange.levelCount = mipLevels;
-			barrier.subresourceRange.baseArrayLayer = 0;
-			barrier.subresourceRange.layerCount = 1;
-
-			VkPipelineStageFlags sourceStage;
-			VkPipelineStageFlags destinationStage;
-			if (oldLayout == VK_IMAGE_LAYOUT_UNDEFINED && newLayout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL)
-			{
-				barrier.srcAccessMask = 0;
-				barrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-
-				sourceStage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
-				destinationStage = VK_PIPELINE_STAGE_TRANSFER_BIT;
-			}
-			else if (oldLayout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL && newLayout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL)
-			{
-				barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-				barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
-
-				sourceStage = VK_PIPELINE_STAGE_TRANSFER_BIT;
-				destinationStage = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
-			}
-			else
-			{
-				NoEntry("Unsupported layout transition!");
-			}
-
-
-			vkCmdPipelineBarrier(commandBuffer,
-				sourceStage, destinationStage,
-				0,
-				0, nullptr,
-				0, nullptr,
-				1, &barrier);
-		}
-		EndSingleTimeCommands(logicalDevice, commandPool, commandBuffer);
-	}
-
-	static void CopyBufferToImage(const std::shared_ptr<VulkanLogicalDevice>& logicalDevice, VkCommandPool commandPool, VkBuffer buffer, VkImage image, uint32_t width, uint32_t height)
-	{
-		VkCommandBuffer commandBuffer = BeginSingleTimeCommands(logicalDevice, commandPool);
-		{
-			VkBufferImageCopy region{};
-			region.bufferOffset = 0;
-			region.bufferRowLength = 0;
-			region.bufferImageHeight = 0;
-
-			region.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-			region.imageSubresource.mipLevel = 0;
-			region.imageSubresource.baseArrayLayer = 0;
-			region.imageSubresource.layerCount = 1;
-
-			region.imageOffset = { 0,0,0 };
-			region.imageExtent = { width, height, 1 };
-
-			vkCmdCopyBufferToImage(commandBuffer, buffer, image,
-				VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
-		}
-		EndSingleTimeCommands(logicalDevice, commandPool, commandBuffer);
-	}
-
-	void GenerateMipmaps(VkPhysicalDevice physicalDevice, const std::shared_ptr<VulkanLogicalDevice>& logicalDevice, VkCommandPool commandPool, VkImage image, VkFormat imageFormat, int32_t textureWidth, int32_t textureHeight, uint32_t mipLevels)
-	{
-		VkFormatProperties formatProperties;
-		vkGetPhysicalDeviceFormatProperties(physicalDevice, imageFormat, &formatProperties);
-
-		Check(formatProperties.optimalTilingFeatures & VK_FORMAT_FEATURE_SAMPLED_IMAGE_FILTER_LINEAR_BIT, "Texture image format does not support linear blitting!");
-
-		VkCommandBuffer commandBuffer = BeginSingleTimeCommands(logicalDevice, commandPool);
-
-		VkImageMemoryBarrier barrier{};
-		barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-		barrier.image = image;
-		barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-		barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-		barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-		barrier.subresourceRange.baseArrayLayer = 0;
-		barrier.subresourceRange.layerCount = 1;
-		barrier.subresourceRange.levelCount = 1;
-
-		int32_t mipWidth = textureWidth;
-		int32_t mipHeight = textureHeight;
-
-		for (uint32_t i = 1; i < mipLevels; i++)
-		{
-			barrier.subresourceRange.baseMipLevel = i - 1;
-			barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-			barrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
-			barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-			barrier.dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
-
-			vkCmdPipelineBarrier(commandBuffer,
-				VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 0,
-				0, nullptr,
-				0, nullptr,
-				1, &barrier);
-
-			VkImageBlit blit{};
-			blit.srcOffsets[0] = { 0,0,0 };
-			blit.srcOffsets[1] = { mipWidth,mipHeight,1 };
-			blit.srcSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-			blit.srcSubresource.mipLevel = i - 1;
-			blit.srcSubresource.baseArrayLayer = 0;
-			blit.srcSubresource.layerCount = 1;
-			blit.dstOffsets[0] = { 0,0,0 };
-			blit.dstOffsets[1] =
-			{
-				mipWidth > 1 ? mipWidth / 2 : 1,
-				mipHeight > 1 ? mipHeight / 2 : 1,
-				1
-			};
-			blit.dstSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-			blit.dstSubresource.mipLevel = i;
-			blit.dstSubresource.baseArrayLayer = 0;
-			blit.dstSubresource.layerCount = 1;
-
-			vkCmdBlitImage(commandBuffer,
-				image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-				image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-				1, &blit,
-				VK_FILTER_LINEAR);
-
-			barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
-			barrier.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-			barrier.srcAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
-			barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
-
-			vkCmdPipelineBarrier(commandBuffer,
-				VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, 0,
-				0, nullptr,
-				0, nullptr,
-				1, &barrier);
-
-			if (mipWidth > 1) mipWidth /= 2;
-			if (mipHeight > 1) mipHeight /= 2;
-		}
-
-		barrier.subresourceRange.baseMipLevel = mipLevels - 1;
-		barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-		barrier.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-		barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-		barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
-
-		vkCmdPipelineBarrier(commandBuffer,
-			VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, 0,
-			0, nullptr,
-			0, nullptr,
-			1, &barrier);
-
-		EndSingleTimeCommands(logicalDevice, commandPool, commandBuffer);
-	}
-#pragma endregion
-
 #pragma region VulkanRendererAPI
 	VulkanRendererAPI::VulkanRendererAPI(const RendererProperties& rendererProperties)
 	{
@@ -331,9 +68,6 @@ namespace FGEngine
 
 		LoadModel();
 
-		CreateTextureImage(*model->GetTexture());
-		CreateTextureImageView();
-		CreateTextureSampler();
 		CreateVertexBuffer();
 		CreateIndexBuffer();
 		CreateUniformBuffer();
@@ -346,9 +80,9 @@ namespace FGEngine
 	{
 		vkDeviceWaitIdle(*logicalDevice);
 
-		VectorDestroy(vkDestroySemaphore, *logicalDevice, imageAvailableSemaphores, nullptr);
-		VectorDestroy(vkDestroySemaphore, *logicalDevice, renderFinishedSemaphores, nullptr);
-		VectorDestroy(vkDestroyFence, *logicalDevice, inFlightFences, nullptr);
+		VulkanUtil::VectorDestroy(vkDestroySemaphore, *logicalDevice, imageAvailableSemaphores, nullptr);
+		VulkanUtil::VectorDestroy(vkDestroySemaphore, *logicalDevice, renderFinishedSemaphores, nullptr);
+		VulkanUtil::VectorDestroy(vkDestroyFence, *logicalDevice, inFlightFences, nullptr);
 
 		vkDestroyBuffer(*logicalDevice, indexBuffer, nullptr);
 		vkFreeMemory(*logicalDevice, indexBufferMemory, nullptr);
@@ -361,13 +95,8 @@ namespace FGEngine
 			model = nullptr;
 		}
 
-		vkDestroySampler(*logicalDevice, textureSampler, nullptr);
-		vkDestroyImageView(*logicalDevice, textureImageView, nullptr);
-		vkDestroyImage(*logicalDevice, textureImage, nullptr);
-		vkFreeMemory(*logicalDevice, textureImageMemory, nullptr);
-
-		VectorDestroy(vkDestroyBuffer, *logicalDevice, uniformBuffers, nullptr);
-		VectorDestroy(vkFreeMemory, *logicalDevice, uniformBuffersMemory, nullptr);
+		VulkanUtil::VectorDestroy(vkDestroyBuffer, *logicalDevice, uniformBuffers, nullptr);
+		VulkanUtil::VectorDestroy(vkFreeMemory, *logicalDevice, uniformBuffersMemory, nullptr);
 
 		vkDestroyDescriptorPool(*logicalDevice, descriptorPool, nullptr);
 		vkDestroyDescriptorSetLayout(*logicalDevice, descriptorSetLayout, nullptr);
@@ -607,81 +336,6 @@ namespace FGEngine
 		depthImageView = std::make_shared<VulkanImageView>(physicalDevice, logicalDevice, swapChain, depthImageViewSetting);
 	}
 
-	void VulkanRendererAPI::CreateTextureImage(const Texture& texture)
-	{
-		VkDeviceSize imageSize = texture.GetWidth() * texture.GetHeight() * 4;
-		mipLevels = static_cast<uint32_t>(std::floor(std::log2(std::max(texture.GetWidth(), texture.GetHeight())))) + 1;
-
-		VkBuffer stagingBuffer;
-		VkDeviceMemory stagingBufferMemory;
-
-		CreateBuffer(imageSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
-			VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-			stagingBuffer, stagingBufferMemory);
-
-		void* data;
-		vkMapMemory(*logicalDevice, stagingBufferMemory, 0, imageSize, 0, &data);
-		{
-			memcpy(data, texture.Data(), static_cast<size_t>(imageSize));
-		}
-		vkUnmapMemory(*logicalDevice, stagingBufferMemory);
-
-		VulkanUtil::CreateImage(physicalDevice, logicalDevice,
-			texture.GetWidth(), texture.GetHeight(), mipLevels,
-			VK_SAMPLE_COUNT_1_BIT, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_TILING_OPTIMAL,
-			VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
-			VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-			textureImage, textureImageMemory);
-
-		TransitionImageLayout(logicalDevice, command->GetPool(),
-			textureImage, VK_FORMAT_R8G8B8A8_SRGB,
-			VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, mipLevels);
-
-		CopyBufferToImage(logicalDevice, command->GetPool(),
-			stagingBuffer, textureImage,
-			texture.GetWidth(), texture.GetHeight());
-
-		/*TransitionImageLayout(logicalDevice, commandPool,
-			textureImage, VK_FORMAT_R8G8B8A8_SRGB,
-			VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, mipLevels);*/
-		vkDestroyBuffer(*logicalDevice, stagingBuffer, nullptr);
-		vkFreeMemory(*logicalDevice, stagingBufferMemory, nullptr);
-
-		GenerateMipmaps(*physicalDevice, logicalDevice, command->GetPool(), textureImage, VK_FORMAT_R8G8B8A8_SRGB, texture.GetWidth(), texture.GetHeight(), mipLevels);
-	}
-
-	void VulkanRendererAPI::CreateTextureImageView()
-	{
-		textureImageView = VulkanUtil::CreateImageView(logicalDevice, textureImage, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_ASPECT_COLOR_BIT, mipLevels);
-	}
-
-	void VulkanRendererAPI::CreateTextureSampler()
-	{
-		VkPhysicalDeviceProperties properties{};
-		vkGetPhysicalDeviceProperties(*physicalDevice, &properties);
-
-		VkSamplerCreateInfo samplerCreateInfo{};
-		samplerCreateInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
-		samplerCreateInfo.magFilter = VK_FILTER_LINEAR;
-		samplerCreateInfo.minFilter = VK_FILTER_LINEAR;
-		samplerCreateInfo.addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT;
-		samplerCreateInfo.addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT;
-		samplerCreateInfo.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
-		samplerCreateInfo.anisotropyEnable = VK_TRUE;
-		samplerCreateInfo.maxAnisotropy = properties.limits.maxSamplerAnisotropy;
-		samplerCreateInfo.borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK;
-		samplerCreateInfo.unnormalizedCoordinates = VK_FALSE;
-		samplerCreateInfo.compareEnable = VK_FALSE;
-		samplerCreateInfo.compareOp = VK_COMPARE_OP_ALWAYS;
-		samplerCreateInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
-		samplerCreateInfo.mipLodBias = 0.0f;
-		samplerCreateInfo.minLod = 0.0f;
-		samplerCreateInfo.maxLod = static_cast<float>(mipLevels);
-
-		VkResult result = vkCreateSampler(*logicalDevice, &samplerCreateInfo, nullptr, &textureSampler);
-		Check(result == VK_SUCCESS, "Failed to create texture sampler. Vulkan error: %d", result);
-	}
-
 	void VulkanRendererAPI::LoadModel()
 	{
 		//model = Model::GenerateQuad();
@@ -689,6 +343,11 @@ namespace FGEngine
 
 		model = new Model("model/viking_room/viking_room.obj");
 		model->SetTexture(Texture("model/viking_room/viking_room.png"));
+
+		textureImageView = std::make_shared<VulkanTextureImageView>(
+			physicalDevice, logicalDevice,
+			swapChain, command,
+			*model->GetTexture());
 	}
 
 	void VulkanRendererAPI::CreateBuffer(
@@ -746,7 +405,7 @@ namespace FGEngine
 			VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
 			vertexBuffer, vertexBufferMemory);
 
-		CopyBuffer(logicalDevice, command->GetPool(), stagingBuffer, vertexBuffer, bufferSize);
+		command->CopyBuffer(stagingBuffer, vertexBuffer, bufferSize);
 
 		vkDestroyBuffer(*logicalDevice, stagingBuffer, nullptr);
 		vkFreeMemory(*logicalDevice, stagingBufferMemory, nullptr);
@@ -777,7 +436,7 @@ namespace FGEngine
 			VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
 			indexBuffer, indexBufferMemory);
 
-		CopyBuffer(logicalDevice, command->GetPool(), stagingBuffer, indexBuffer, bufferSize);
+		command->CopyBuffer(stagingBuffer, indexBuffer, bufferSize);
 
 		vkDestroyBuffer(*logicalDevice, stagingBuffer, nullptr);
 		vkFreeMemory(*logicalDevice, stagingBufferMemory, nullptr);
@@ -843,8 +502,8 @@ namespace FGEngine
 
 			VkDescriptorImageInfo imageInfo{};
 			imageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-			imageInfo.imageView = textureImageView;
-			imageInfo.sampler = textureSampler;
+			imageInfo.imageView = *textureImageView;
+			imageInfo.sampler = textureImageView->GetSampler();
 
 			std::array<VkWriteDescriptorSet, 2> writeDescriptorSets{};
 			writeDescriptorSets[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
