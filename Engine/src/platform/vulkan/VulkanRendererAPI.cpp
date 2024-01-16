@@ -10,6 +10,7 @@
 #include "platform/vulkan/VulkanShaderModule.h"
 #include "platform/vulkan/VulkanImageView.h"
 #include "platform/vulkan/VulkanTextureImageView.h"
+#include "platform/vulkan/VulkanBuffer.h"
 #include "platform/vulkan/VulkanUtil.h"
 
 #include "core/Logger.h"
@@ -68,8 +69,6 @@ namespace FGEngine
 
 		LoadModel();
 
-		CreateVertexBuffer();
-		CreateIndexBuffer();
 		CreateUniformBuffer();
 		CreateDescriptorPool();
 		CreateDescriptorSets();
@@ -83,11 +82,6 @@ namespace FGEngine
 		VulkanUtil::VectorDestroy(vkDestroySemaphore, *logicalDevice, imageAvailableSemaphores, nullptr);
 		VulkanUtil::VectorDestroy(vkDestroySemaphore, *logicalDevice, renderFinishedSemaphores, nullptr);
 		VulkanUtil::VectorDestroy(vkDestroyFence, *logicalDevice, inFlightFences, nullptr);
-
-		vkDestroyBuffer(*logicalDevice, indexBuffer, nullptr);
-		vkFreeMemory(*logicalDevice, indexBufferMemory, nullptr);
-		vkDestroyBuffer(*logicalDevice, vertexBuffer, nullptr);
-		vkFreeMemory(*logicalDevice, vertexBufferMemory, nullptr);
 
 		if (model)
 		{
@@ -348,98 +342,15 @@ namespace FGEngine
 			physicalDevice, logicalDevice,
 			swapChain, command,
 			*model->GetTexture());
-	}
 
-	void VulkanRendererAPI::CreateBuffer(
-		VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties,
-		VkBuffer& buffer, VkDeviceMemory& bufferMemory)
-	{
-		VkBufferCreateInfo bufferCreateInfo{};
-		bufferCreateInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-		bufferCreateInfo.size = size;
-		bufferCreateInfo.usage = usage;
-		bufferCreateInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-		bufferCreateInfo.flags = 0;
 
-		VkResult result = vkCreateBuffer(*logicalDevice, &bufferCreateInfo, nullptr, &buffer);
-		Check(result == VK_SUCCESS, "Failed to create vertex buffer. Vulkan error: %d", result);
-
-		VkMemoryRequirements memoryRequirements;
-		vkGetBufferMemoryRequirements(*logicalDevice, buffer, &memoryRequirements);
-
-		VkMemoryAllocateInfo allocateInfo{};
-		allocateInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-		allocateInfo.allocationSize = memoryRequirements.size;
-		allocateInfo.memoryTypeIndex = physicalDevice->FindMemoryType(memoryRequirements.memoryTypeBits, properties);
-
-		// NOTE: shouldn't do allocation for each individual buffer, instead should create a custom allocator
-		// ref: https://vulkan-tutorial.com/Vertex_buffers/Staging_buffer#:~:text=more%20complex%20geometry.-,Conclusion,-It%20should%20be
-		result = vkAllocateMemory(*logicalDevice, &allocateInfo, nullptr, &bufferMemory);
-		Check(result == VK_SUCCESS, "Failed to allocate vertex buffer memory. Vulkan error: %d", result);
-
-		vkBindBufferMemory(*logicalDevice, buffer, bufferMemory, 0);
-	}
-
-	void VulkanRendererAPI::CreateVertexBuffer()
-	{
 		std::vector<Vertex> vertices = model->GetMesh(0)->GetVertices();
-		VkDeviceSize bufferSize = sizeof(vertices[0]) * vertices.size();
+		vertexBuffer = std::make_shared<VulkanBuffer>(logicalDevice);
+		vertexBuffer->Init(physicalDevice, command, vertices, EBufferType::Vertex);
 
-		VkBuffer stagingBuffer;
-		VkDeviceMemory stagingBufferMemory;
-
-		CreateBuffer(bufferSize,
-			VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
-			VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-			stagingBuffer, stagingBufferMemory);
-
-		void* data;
-		vkMapMemory(*logicalDevice, stagingBufferMemory, 0, bufferSize, 0, &data);
-		{
-			memcpy(data, vertices.data(), (size_t)bufferSize);
-		}
-		vkUnmapMemory(*logicalDevice, stagingBufferMemory);
-
-		CreateBuffer(bufferSize,
-			VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
-			VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-			vertexBuffer, vertexBufferMemory);
-
-		command->CopyBuffer(stagingBuffer, vertexBuffer, bufferSize);
-
-		vkDestroyBuffer(*logicalDevice, stagingBuffer, nullptr);
-		vkFreeMemory(*logicalDevice, stagingBufferMemory, nullptr);
-	}
-
-	void VulkanRendererAPI::CreateIndexBuffer()
-	{
 		std::vector<uint32_t> indices = model->GetMesh(0)->GetIndices();
-		VkDeviceSize bufferSize = sizeof(indices[0]) * indices.size();
-
-		VkBuffer stagingBuffer;
-		VkDeviceMemory stagingBufferMemory;
-
-		CreateBuffer(bufferSize,
-			VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
-			VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-			stagingBuffer, stagingBufferMemory);
-
-		void* data;
-		vkMapMemory(*logicalDevice, stagingBufferMemory, 0, bufferSize, 0, &data);
-		{
-			memcpy(data, indices.data(), (size_t)bufferSize);
-		}
-		vkUnmapMemory(*logicalDevice, stagingBufferMemory);
-
-		CreateBuffer(bufferSize,
-			VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
-			VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-			indexBuffer, indexBufferMemory);
-
-		command->CopyBuffer(stagingBuffer, indexBuffer, bufferSize);
-
-		vkDestroyBuffer(*logicalDevice, stagingBuffer, nullptr);
-		vkFreeMemory(*logicalDevice, stagingBufferMemory, nullptr);
+		indexBuffer = std::make_shared<VulkanBuffer>(logicalDevice);
+		indexBuffer->Init(physicalDevice, command, indices, EBufferType::Index);
 	}
 
 	void VulkanRendererAPI::CreateUniformBuffer()
@@ -452,7 +363,9 @@ namespace FGEngine
 
 		for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++)
 		{
-			CreateBuffer(bufferSize,
+			VulkanBuffer::CreateBuffer(
+				physicalDevice, logicalDevice,
+				bufferSize,
 				VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
 				VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
 				uniformBuffers[i], uniformBuffersMemory[i]);
@@ -635,11 +548,11 @@ namespace FGEngine
 
 			vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
 
-			VkBuffer vertexBuffers[] = { vertexBuffer };
+			VkBuffer vertexBuffers[] = { *vertexBuffer };
 			VkDeviceSize offsets[] = { 0 };
-			vkCmdBindVertexBuffers(commandBuffer, 0, 1, &vertexBuffer, offsets);
+			vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets);
 
-			vkCmdBindIndexBuffer(commandBuffer, indexBuffer, 0, VK_INDEX_TYPE_UINT32);
+			vkCmdBindIndexBuffer(commandBuffer, *indexBuffer, 0, VK_INDEX_TYPE_UINT32);
 
 			vkCmdBindDescriptorSets(commandBuffer,
 				VK_PIPELINE_BIND_POINT_GRAPHICS, graphicsPipeline->GetLayout(), 0,

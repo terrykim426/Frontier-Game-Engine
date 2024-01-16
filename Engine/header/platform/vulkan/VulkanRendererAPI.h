@@ -25,6 +25,7 @@ namespace FGEngine
 	class VulkanCommand;
 	class VulkanImageView;
 	class VulkanTextureImageView;
+	class VulkanBuffer;
 
 	class Texture;
 
@@ -52,9 +53,6 @@ namespace FGEngine
 		void CreateColorResources();
 		void CreateDepthResources();
 		void LoadModel();
-		void CreateBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkBuffer& buffer, VkDeviceMemory& bufferMemory);
-		void CreateVertexBuffer();
-		void CreateIndexBuffer();
 		void CreateUniformBuffer();
 		void CreateDescriptorPool();
 		void CreateDescriptorSets();
@@ -81,10 +79,8 @@ namespace FGEngine
 		std::shared_ptr<VulkanPipeline> graphicsPipeline;
 		std::shared_ptr<VulkanCommand> command;
 
-		VkBuffer vertexBuffer;
-		VkDeviceMemory vertexBufferMemory;
-		VkBuffer indexBuffer;
-		VkDeviceMemory indexBufferMemory;
+		std::shared_ptr<VulkanBuffer> vertexBuffer;
+		std::shared_ptr<VulkanBuffer> indexBuffer;
 
 		std::vector<VkBuffer> uniformBuffers;
 		std::vector<VkDeviceMemory> uniformBuffersMemory;
