@@ -26,6 +26,7 @@ namespace FGEngine
 	class VulkanImageView;
 	class VulkanTextureImageView;
 	class VulkanBuffer;
+	class VulkanDescriptor;
 
 	class Texture;
 
@@ -49,13 +50,10 @@ namespace FGEngine
 
 	private:
 		void CreateRenderPass();
-		void CreateDescriptorSetLayout();
 		void CreateColorResources();
 		void CreateDepthResources();
 		void LoadModel();
 		void CreateUniformBuffer();
-		void CreateDescriptorPool();
-		void CreateDescriptorSets();
 		void CreateSyncObjects();
 
 		void RecreateSwapChain();
@@ -72,9 +70,8 @@ namespace FGEngine
 		std::shared_ptr<VulkanSwapChain> swapChain;
 
 		VkRenderPass renderPass;
-		VkDescriptorSetLayout descriptorSetLayout;
-		VkDescriptorPool descriptorPool;
-		std::vector<VkDescriptorSet> descriptorSets;
+
+		std::shared_ptr<VulkanDescriptor> descriptor;
 
 		std::shared_ptr<VulkanPipeline> graphicsPipeline;
 		std::shared_ptr<VulkanCommand> command;

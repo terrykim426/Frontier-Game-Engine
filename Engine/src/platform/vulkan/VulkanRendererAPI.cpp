@@ -11,6 +11,7 @@
 #include "platform/vulkan/VulkanImageView.h"
 #include "platform/vulkan/VulkanTextureImageView.h"
 #include "platform/vulkan/VulkanBuffer.h"
+#include "platform/vulkan/VulkanDescriptor.h"
 #include "platform/vulkan/VulkanUtil.h"
 
 #include "core/Logger.h"
@@ -46,7 +47,8 @@ namespace FGEngine
 		swapChain = std::make_shared<VulkanSwapChain>(vulkanInstance, physicalDevice, logicalDevice, nativeWindow);
 
 		CreateRenderPass();
-		CreateDescriptorSetLayout();
+
+		descriptor = std::make_shared<VulkanDescriptor>(logicalDevice, MAX_FRAMES_IN_FLIGHT);
 
 		Shader vertShader("shader/TestShaderVert.spv", Shader::EType::Vertex);
 		Shader fragShader("shader/TestShaderFrag.spv", Shader::EType::Fragment);
@@ -55,7 +57,7 @@ namespace FGEngine
 		pipelineSetting.vertexShaderModule = std::make_shared<VulkanShaderModule>(logicalDevice, vertShader);
 		pipelineSetting.fragmentShaderModule = std::make_shared<VulkanShaderModule>(logicalDevice, fragShader);
 		pipelineSetting.msaaSamples = msaaSamples;
-		pipelineSetting.descriptorSetLayout = descriptorSetLayout;
+		pipelineSetting.descriptorSetLayout = descriptor->GetSetLayout();
 		pipelineSetting.renderPass = renderPass;
 
 		graphicsPipeline = std::make_shared<VulkanPipeline>(logicalDevice, pipelineSetting);
@@ -70,8 +72,9 @@ namespace FGEngine
 		LoadModel();
 
 		CreateUniformBuffer();
-		CreateDescriptorPool();
-		CreateDescriptorSets();
+
+		descriptor->CreateDescriptorSets(MAX_FRAMES_IN_FLIGHT, uniformBuffers, sizeof(UniformBufferObject), textureImageView);
+
 		CreateSyncObjects();
 	}
 
@@ -92,8 +95,6 @@ namespace FGEngine
 		VulkanUtil::VectorDestroy(vkDestroyBuffer, *logicalDevice, uniformBuffers, nullptr);
 		VulkanUtil::VectorDestroy(vkFreeMemory, *logicalDevice, uniformBuffersMemory, nullptr);
 
-		vkDestroyDescriptorPool(*logicalDevice, descriptorPool, nullptr);
-		vkDestroyDescriptorSetLayout(*logicalDevice, descriptorSetLayout, nullptr);
 
 		vkDestroyRenderPass(*logicalDevice, renderPass, nullptr);
 	}
@@ -279,33 +280,6 @@ namespace FGEngine
 
 	}
 
-	void VulkanRendererAPI::CreateDescriptorSetLayout()
-	{
-		VkDescriptorSetLayoutBinding uboLayoutBinding{};
-		uboLayoutBinding.binding = 0;
-		uboLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-		uboLayoutBinding.descriptorCount = 1;
-		uboLayoutBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
-		uboLayoutBinding.pImmutableSamplers = nullptr;
-
-		VkDescriptorSetLayoutBinding samplerLayoutBinding{};
-		samplerLayoutBinding.binding = 1;
-		samplerLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-		samplerLayoutBinding.descriptorCount = 1;
-		samplerLayoutBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
-		samplerLayoutBinding.pImmutableSamplers = nullptr;
-
-		std::array<VkDescriptorSetLayoutBinding, 2> bindings = { uboLayoutBinding, samplerLayoutBinding };
-		VkDescriptorSetLayoutCreateInfo layoutCreateInfo{};
-		layoutCreateInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-		layoutCreateInfo.bindingCount = static_cast<uint32_t>(bindings.size());
-		layoutCreateInfo.pBindings = bindings.data();
-
-		VkResult result = vkCreateDescriptorSetLayout(*logicalDevice, &layoutCreateInfo, nullptr, &descriptorSetLayout);
-		Check(result == VK_SUCCESS, "Failed to create descriptor set layout. Vulkan error: %d", result);
-
-	}
-
 	void VulkanRendererAPI::CreateColorResources()
 	{
 		VulkanImageViewSetting colorImageViewSetting{};
@@ -371,74 +345,6 @@ namespace FGEngine
 				uniformBuffers[i], uniformBuffersMemory[i]);
 
 			vkMapMemory(*logicalDevice, uniformBuffersMemory[i], 0, bufferSize, 0, &uniformBuffersMapped[i]);
-		}
-	}
-
-	void VulkanRendererAPI::CreateDescriptorPool()
-	{
-		std::array<VkDescriptorPoolSize, 2> poolSizes{};
-		poolSizes[0].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-		poolSizes[0].descriptorCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT);
-		poolSizes[1].type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-		poolSizes[1].descriptorCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT);
-
-		VkDescriptorPoolCreateInfo createInfo{};
-		createInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
-		createInfo.poolSizeCount = static_cast<uint32_t>(poolSizes.size());
-		createInfo.pPoolSizes = poolSizes.data();
-		createInfo.maxSets = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT);
-
-		VkResult result = vkCreateDescriptorPool(*logicalDevice, &createInfo, nullptr, &descriptorPool);
-		Check(result == VK_SUCCESS, "Failed to create descriptor pool. Vulkan error: %d", result);
-	}
-
-	void VulkanRendererAPI::CreateDescriptorSets()
-	{
-		std::vector<VkDescriptorSetLayout> layouts(MAX_FRAMES_IN_FLIGHT, descriptorSetLayout);
-
-		VkDescriptorSetAllocateInfo allocateInfo{};
-		allocateInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
-		allocateInfo.descriptorPool = descriptorPool;
-		allocateInfo.descriptorSetCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT);
-		allocateInfo.pSetLayouts = layouts.data();
-
-		descriptorSets.resize(MAX_FRAMES_IN_FLIGHT);
-		VkResult result = vkAllocateDescriptorSets(*logicalDevice, &allocateInfo, descriptorSets.data());
-		Check(result == VK_SUCCESS, "Failed to allocate descriptor sets. Vulkan error: %d", result);
-
-		for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++)
-		{
-			VkDescriptorBufferInfo bufferInfo{};
-			bufferInfo.buffer = uniformBuffers[i];
-			bufferInfo.offset = 0;
-			bufferInfo.range = sizeof(UniformBufferObject);
-
-			VkDescriptorImageInfo imageInfo{};
-			imageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-			imageInfo.imageView = *textureImageView;
-			imageInfo.sampler = textureImageView->GetSampler();
-
-			std::array<VkWriteDescriptorSet, 2> writeDescriptorSets{};
-			writeDescriptorSets[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-			writeDescriptorSets[0].dstSet = descriptorSets[i];
-			writeDescriptorSets[0].dstBinding = 0;
-			writeDescriptorSets[0].dstArrayElement = 0;
-			writeDescriptorSets[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-			writeDescriptorSets[0].descriptorCount = 1;
-			writeDescriptorSets[0].pBufferInfo = &bufferInfo;
-
-			writeDescriptorSets[1].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-			writeDescriptorSets[1].dstSet = descriptorSets[i];
-			writeDescriptorSets[1].dstBinding = 1;
-			writeDescriptorSets[1].dstArrayElement = 0;
-			writeDescriptorSets[1].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-			writeDescriptorSets[1].descriptorCount = 1;
-			writeDescriptorSets[1].pImageInfo = &imageInfo;
-
-			vkUpdateDescriptorSets(*logicalDevice,
-				static_cast<uint32_t>(writeDescriptorSets.size()),
-				writeDescriptorSets.data(),
-				0, nullptr);
 		}
 	}
 
@@ -554,9 +460,10 @@ namespace FGEngine
 
 			vkCmdBindIndexBuffer(commandBuffer, *indexBuffer, 0, VK_INDEX_TYPE_UINT32);
 
+			VkDescriptorSet descriptorSet = descriptor->GetSet(currentFrame);
 			vkCmdBindDescriptorSets(commandBuffer,
 				VK_PIPELINE_BIND_POINT_GRAPHICS, graphicsPipeline->GetLayout(), 0,
-				1, &descriptorSets[currentFrame],
+				1, &descriptorSet,
 				0, nullptr);
 
 			vkCmdDrawIndexed(commandBuffer, static_cast<uint32_t>(model->GetMesh(0)->GetIndices().size()), 1, 0, 0, 0);

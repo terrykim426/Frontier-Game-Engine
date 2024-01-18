@@ -184,6 +184,7 @@
     <ClInclude Include="header\platform\vulkan\VulkanShaderModule.h" />
     <ClInclude Include="header\platform\vulkan\VulkanImageView.h" />
     <ClInclude Include="header\platform\vulkan\VulkanBuffer.h" />
+    <ClInclude Include="header\platform\vulkan\VulkanDescriptor.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\platform\vulkan\VulkanTextureImageView.cpp" />
@@ -218,6 +219,7 @@
     <ClCompile Include="src\platform\vulkan\VulkanShaderModule.cpp" />
     <ClCompile Include="src\platform\vulkan\VulkanImageView.cpp" />
     <ClCompile Include="src\platform\vulkan\VulkanBuffer.cpp" />
+    <ClCompile Include="src\platform\vulkan\VulkanDescriptor.cpp" />
   </ItemGroup>
   <ItemGroup>
     <None Include="shader\TestShader.frag" />
