@@ -6,180 +6,181 @@
 #include "renderer/Renderer.h"
 
 #include <iostream>
+#include <memory>
 
 namespace FGEngine
 {
-	bool WindowsWindow::bIsInitialized = false;
+bool WindowsWindow::bIsInitialized = false;
 
-	WindowsWindow::WindowsWindow(const WindowProperties& windowProperties)
+WindowsWindow::WindowsWindow(const WindowProperties& windowProperties)
+{
+	Init(windowProperties);
+}
+
+WindowsWindow::~WindowsWindow()
+{
+	Shutdown();
+}
+
+void WindowsWindow::Init(const WindowProperties& windowProperties)
+{
+	windowData.title = windowProperties.title;
+	windowData.width = windowProperties.width;
+	windowData.height = windowProperties.height;
+
+	if (!bIsInitialized)
 	{
-		Init(windowProperties);
+		int success = glfwInit();
+		Check(success, "GLFW failed to initialize");
+		bIsInitialized = true;
 	}
 
-	WindowsWindow::~WindowsWindow()
+	if (!windowEventHandle.IsValid())
 	{
-		Shutdown();
+		windowEventHandle = windowData.windowDelegate->Add1(this, WindowsWindow::OnWindowEvent);
 	}
 
-	void WindowsWindow::Init(const WindowProperties& windowProperties)
-	{
-		windowData.title = windowProperties.title;
-		windowData.width = windowProperties.width;
-		windowData.height = windowProperties.height;
+	// TODO: to be set from external source
+	//rendererAPI = ERendererAPI::OpenGL;
+	rendererAPI = ERendererAPI::Vulkan;
 
-		if (!bIsInitialized)
+	if (rendererAPI == ERendererAPI::Vulkan)
+	{
+		glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
+	}
+
+	nativeWindow = glfwCreateWindow(windowData.width, windowData.height, windowData.title.c_str(), nullptr, nullptr);
+
+	if (rendererAPI == ERendererAPI::OpenGL)
+	{
+		glfwMakeContextCurrent(nativeWindow);
+	}
+	glfwSetWindowUserPointer(nativeWindow, &windowData);
+
+	SetVSync(true);
+
+	Renderer::Init(RendererProperties(rendererAPI, nativeWindow));
+	//Renderer::SetClearColor(1, 0, 1, 1);
+	Renderer::SetClearColor(0.02f, 0.02f, 0.02f, 1);
+
+	glfwSetWindowSizeCallback(nativeWindow, [](GLFWwindow* glWindow, int width, int height)
 		{
-			int success = glfwInit();
-			Check(success, "GLFW failed to initialize");
-			bIsInitialized = true;
-		}
+			auto* data = (WindowData*)glfwGetWindowUserPointer(glWindow);
+			data->width = width;
+			data->height = height;
+			data->windowDelegate->Broadcast(std::make_shared<WindowResizeEvent>(width, height));
+		});
 
-		if (!windowEventHandle.IsValid())
+	glfwSetWindowCloseCallback(nativeWindow, [](GLFWwindow* window)
 		{
-			windowEventHandle = windowData.windowDelegate->Add1(this, WindowsWindow::OnWindowEvent);
-		}
+			auto* data = (WindowData*)glfwGetWindowUserPointer(window);
+			data->windowDelegate->Broadcast(std::make_shared<WindowClosedEvent>());
+		});
 
-		// TODO: to be set from external source
-		//rendererAPI = ERendererAPI::OpenGL;
-		rendererAPI = ERendererAPI::Vulkan;
-
-		if (rendererAPI == ERendererAPI::Vulkan)
+	glfwSetWindowFocusCallback(nativeWindow, [](GLFWwindow* glWindow, int focused)
 		{
-			glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
-		}
+			auto* data = (WindowData*)glfwGetWindowUserPointer(glWindow);
+			data->windowDelegate->Broadcast(std::make_shared<WindowFocusChangedEvent>(focused));
+		});
 
-		nativeWindow = glfwCreateWindow(windowData.width, windowData.height, windowData.title.c_str(), nullptr, nullptr);
 
-		if (rendererAPI == ERendererAPI::OpenGL)
+	glfwSetCursorPosCallback(nativeWindow, [](GLFWwindow* glWindow, double xpos, double ypos)
 		{
-			glfwMakeContextCurrent(nativeWindow);
-		}
-		glfwSetWindowUserPointer(nativeWindow, &windowData);
+			auto* data = (WindowData*)glfwGetWindowUserPointer(glWindow);
+			data->windowDelegate->Broadcast(std::make_shared<CursorPositionEvent>(xpos, ypos));
+		});
 
-		SetVSync(true);
-
-		Renderer::Init(RendererProperties(rendererAPI, nativeWindow));
-		//Renderer::SetClearColor(1, 0, 1, 1);
-		Renderer::SetClearColor(0.02f, 0.02f, 0.02f, 1);
-
-		glfwSetWindowSizeCallback(nativeWindow, [](GLFWwindow* glWindow, int width, int height)
-			{
-				auto* data = (WindowData*)glfwGetWindowUserPointer(glWindow);
-				data->width = width;
-				data->height = height;
-				data->windowDelegate->Broadcast(WindowResizeEvent(width, height));
-			});
-
-		glfwSetWindowCloseCallback(nativeWindow, [](GLFWwindow* window)
-			{
-				auto* data = (WindowData*)glfwGetWindowUserPointer(window);
-				data->windowDelegate->Broadcast(WindowClosedEvent());
-			});
-
-		glfwSetWindowFocusCallback(nativeWindow, [](GLFWwindow* glWindow, int focused)
-			{
-				auto* data = (WindowData*)glfwGetWindowUserPointer(glWindow);
-				data->windowDelegate->Broadcast(WindowFocusChangedEvent(focused));
-			});
-
-
-		glfwSetCursorPosCallback(nativeWindow, [](GLFWwindow* glWindow, double xpos, double ypos)
-			{
-				auto* data = (WindowData*)glfwGetWindowUserPointer(glWindow);
-				data->windowDelegate->Broadcast(CursorPositionEvent(xpos, ypos));
-			});
-
-		glfwSetCursorEnterCallback(nativeWindow, [](GLFWwindow* glWindow, int entered)
-			{
-				auto* data = (WindowData*)glfwGetWindowUserPointer(glWindow);
-				data->windowDelegate->Broadcast(CursorEnterChangedEvent(entered));
-			});
-
-		glfwSetMouseButtonCallback(nativeWindow, [](GLFWwindow* glWindow, int button, int action, int mods)
-			{
-				auto* data = (WindowData*)glfwGetWindowUserPointer(glWindow);
-				switch (action)
-				{
-				case GLFW_PRESS:
-					data->windowDelegate->Broadcast(MousePressedEvent(button, mods));
-					break;
-				case GLFW_RELEASE:
-					data->windowDelegate->Broadcast(MouseReleasedEvent(button, mods));
-					break;
-				}
-			});
-
-		glfwSetScrollCallback(nativeWindow, [](GLFWwindow* glWindow, double xoffset, double yoffset)
-			{
-				auto* data = (WindowData*)glfwGetWindowUserPointer(glWindow);
-				data->windowDelegate->Broadcast(MouseScrolledEvent(xoffset, yoffset));
-			});
-
-		glfwSetKeyCallback(nativeWindow, [](GLFWwindow* glWindow, int key, int scancode, int action, int mods)
-			{
-				auto* data = (WindowData*)glfwGetWindowUserPointer(glWindow);
-				switch (action)
-				{
-				case GLFW_PRESS:
-					data->windowDelegate->Broadcast(KeyPressedEvent(key, mods));
-					break;
-				case GLFW_RELEASE:
-					data->windowDelegate->Broadcast(KeyReleasedEvent(key, mods));
-					break;
-				case GLFW_REPEAT:
-					data->windowDelegate->Broadcast(KeyRepeatedEvent(key, mods));
-					break;
-				}
-			});
-	}
-
-	void WindowsWindow::Shutdown()
-	{
-		Renderer::Shutdown();
-		glfwDestroyWindow(nativeWindow);
-		glfwTerminate();
-	}
-
-	void WindowsWindow::OnWindowEvent(const IWindowEvent& windowEvent)
-	{
-		switch (windowEvent.GetEventType())
+	glfwSetCursorEnterCallback(nativeWindow, [](GLFWwindow* glWindow, int entered)
 		{
-		case EWindowEventType::WindowResize:
-			Renderer::Resize();
-			break;
-		}
+			auto* data = (WindowData*)glfwGetWindowUserPointer(glWindow);
+			data->windowDelegate->Broadcast(std::make_shared<CursorEnterChangedEvent>(entered));
+		});
 
-		windowDelegate->Broadcast(windowEvent);
-	}
+	glfwSetMouseButtonCallback(nativeWindow, [](GLFWwindow* glWindow, int button, int action, int mods)
+		{
+			auto* data = (WindowData*)glfwGetWindowUserPointer(glWindow);
+			switch (action)
+			{
+			case GLFW_PRESS:
+				data->windowDelegate->Broadcast(std::make_shared<MousePressedEvent>(button, mods));
+				break;
+			case GLFW_RELEASE:
+				data->windowDelegate->Broadcast(std::make_shared<MouseReleasedEvent>(button, mods));
+				break;
+			}
+		});
 
-	unsigned int WindowsWindow::GetWidth() const
+	glfwSetScrollCallback(nativeWindow, [](GLFWwindow* glWindow, double xoffset, double yoffset)
+		{
+			auto* data = (WindowData*)glfwGetWindowUserPointer(glWindow);
+			data->windowDelegate->Broadcast(std::make_shared<MouseScrolledEvent>(xoffset, yoffset));
+		});
+
+	glfwSetKeyCallback(nativeWindow, [](GLFWwindow* glWindow, int key, int scancode, int action, int mods)
+		{
+			auto* data = (WindowData*)glfwGetWindowUserPointer(glWindow);
+			switch (action)
+			{
+			case GLFW_PRESS:
+				data->windowDelegate->Broadcast(std::make_shared<KeyPressedEvent>(key, mods));
+				break;
+			case GLFW_RELEASE:
+				data->windowDelegate->Broadcast(std::make_shared<KeyReleasedEvent>(key, mods));
+				break;
+			case GLFW_REPEAT:
+				data->windowDelegate->Broadcast(std::make_shared<KeyRepeatedEvent>(key, mods));
+				break;
+			}
+		});
+}
+
+void WindowsWindow::Shutdown()
+{
+	Renderer::Shutdown();
+	glfwDestroyWindow(nativeWindow);
+	glfwTerminate();
+}
+
+void WindowsWindow::OnWindowEvent(const std::shared_ptr<IWindowEvent>& windowEvent)
+{
+	switch (windowEvent->GetEventType())
 	{
-		return windowData.width;
+	case EWindowEventType::WindowResize:
+		Renderer::Resize();
+		break;
 	}
 
-	unsigned int WindowsWindow::GetHeight() const
-	{
-		return windowData.height;
-	}
+	windowDelegate->Broadcast(windowEvent);
+}
 
-	void WindowsWindow::OnUpdate(float deltaTime)
-	{
-		Renderer::Clear();
+unsigned int WindowsWindow::GetWidth() const
+{
+	return windowData.width;
+}
 
-		glfwPollEvents();
+unsigned int WindowsWindow::GetHeight() const
+{
+	return windowData.height;
+}
 
-		Renderer::Render(nativeWindow);
-	}
+void WindowsWindow::OnUpdate(float deltaTime)
+{
+	Renderer::Clear();
 
-	void WindowsWindow::SetVSync(bool bEnable)
-	{
-		glfwSwapInterval(bEnable ? 1 : 0);
-		windowData.bVSync = bEnable;
-	}
+	glfwPollEvents();
 
-	bool WindowsWindow::IsVSync()
-	{
-		return windowData.bVSync;
-	}
+	Renderer::Render(nativeWindow);
+}
+
+void WindowsWindow::SetVSync(bool bEnable)
+{
+	glfwSwapInterval(bEnable ? 1 : 0);
+	windowData.bVSync = bEnable;
+}
+
+bool WindowsWindow::IsVSync()
+{
+	return windowData.bVSync;
+}
 
 }

@@ -4,71 +4,84 @@
 
 namespace FGEngine
 {
-	Application::Application()
-	{
-		bIsRunning = true;
-		window = std::unique_ptr<IWindow>(IWindow::Create());
-		windowEventHandle = window->windowDelegate->Add1(this, Application::OnWindowEvent);
-	}
+Application::Application()
+{
+	bIsRunning = true;
+	window = std::unique_ptr<IWindow>(IWindow::Create());
+	windowEventHandle = window->windowDelegate->Add1(this, Application::OnWindowEvent);
 
-	Application::~Application()
-	{
-		window.reset();
-	}
+}
 
-	void Application::Run()
+Application::~Application()
+{
+	window.reset();
+}
+
+void Application::Run()
+{
+	float deltaTime = 0;	// TODO: setup delta time
+	while (bIsRunning)
 	{
-		while (bIsRunning)
+		for (AppLayer* appLayer : layerStack)
 		{
-			for (AppLayer* appLayer : layerStack)
-			{
-				appLayer->OnUpdate(0);
-			}
-
-			window->OnUpdate(0);
+			appLayer->OnUpdate(deltaTime);
 		}
-	}
 
-	bool Application::CanClose()
+		window->OnUpdate(deltaTime);
+	}
+}
+
+bool Application::CanClose()
+{
+	return bIsRunning;
+}
+
+void Application::Close()
+{
+	bIsRunning = false;
+}
+
+void Application::PushLayer(AppLayer* appLayer)
+{
+	layerStack.PushLayer(appLayer);
+}
+
+void Application::PopLayer(AppLayer* appLayer)
+{
+	layerStack.PopLayer(appLayer);
+}
+
+void Application::PushOverlay(AppLayer* appLayer)
+{
+	layerStack.PushOverlay(appLayer);
+}
+
+void Application::PopOverlay(AppLayer* appLayer)
+{
+	layerStack.PopOverlay(appLayer);
+}
+
+void Application::OnWindowEvent(const std::shared_ptr<IWindowEvent>& windowEvent)
+{
+	LogInfo("Window Event (%s)", windowEvent->ToString().c_str());
+	switch (windowEvent->GetEventType())
 	{
-		return bIsRunning;
-	}
-
-	void Application::Close()
+	case EWindowEventType::WindowClose:
 	{
 		bIsRunning = false;
 	}
-
-	void Application::PushLayer(AppLayer* appLayer)
+	break;
+	case EWindowEventType::CursorPosition:
+	case EWindowEventType::CursorEnterChanged:
+	case EWindowEventType::MousePressed:
+	case EWindowEventType::MouseReleased:
+	case EWindowEventType::MouseScrolled:
+	case EWindowEventType::KeyPressed:
+	case EWindowEventType::KeyReleased:
+	case EWindowEventType::KeyRepeated:
 	{
-		layerStack.PushLayer(appLayer);
 	}
-
-	void Application::PopLayer(AppLayer* appLayer)
-	{
-		layerStack.PopLayer(appLayer);
+	break;
 	}
-
-	void Application::PushOverlay(AppLayer* appLayer)
-	{
-		layerStack.PushOverlay(appLayer);
-	}
-
-	void Application::PopOverlay(AppLayer* appLayer)
-	{
-		layerStack.PopOverlay(appLayer);
-	}
-
-	void Application::OnWindowEvent(const IWindowEvent& windowEvent)
-	{
-		LogInfo("Window Event (%s)", windowEvent.ToString().c_str());
-		switch (windowEvent.GetEventType())
-		{
-		case EWindowEventType::WindowClose:
-		{
-			bIsRunning = false;
-		}
-		break;
-		}
-	}
+}
 }

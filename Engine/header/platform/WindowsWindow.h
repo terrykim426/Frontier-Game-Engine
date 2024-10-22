@@ -27,7 +27,7 @@ namespace FGEngine
 		virtual void Init(const WindowProperties& windowProperties);
 		virtual void Shutdown();
 
-		virtual void OnWindowEvent(const IWindowEvent& windowEvent);
+		virtual void OnWindowEvent(const std::shared_ptr<IWindowEvent>& windowEvent);
 
 	private:
 		static bool bIsInitialized;

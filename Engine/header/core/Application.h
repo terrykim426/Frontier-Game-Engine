@@ -31,7 +31,7 @@ namespace FGEngine
 		void PopOverlay(AppLayer* appLayer);
 
 	private:
-		void OnWindowEvent(const IWindowEvent& windowEvent);
+		void OnWindowEvent(const std::shared_ptr<IWindowEvent>& windowEvent);
 
 	private:
 		bool bIsRunning;

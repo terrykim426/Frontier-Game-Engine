@@ -5,7 +5,7 @@
 #include "core/Delegate.h"
 #include "event/WindowEvent.h"
 
-DECLARE_DELEGATE_ONE(Window, const FGEngine::IWindowEvent&);
+DECLARE_DELEGATE_ONE(Window, const std::shared_ptr<FGEngine::IWindowEvent>&);
 
 namespace FGEngine
 {
