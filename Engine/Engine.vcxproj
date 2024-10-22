@@ -113,7 +113,7 @@
       <PrecompiledHeader>Use</PrecompiledHeader>
       <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
       <AdditionalIncludeDirectories>$(ProjectDir)vendor\assimp\out\build\$(Platform)-$(Configuration)\include;$(ProjectDir)vendor\assimp\include;$(ProjectDir)vendor\stb;$(ProjectDir)vendor\vulkan\Include;$(ProjectDir)vendor\glm;$(ProjectDir)vendor\glfw\include;$(ProjectDir)header;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
-      <LanguageStandard>stdcpp17</LanguageStandard>
+      <LanguageStandard>stdcpp20</LanguageStandard>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -134,7 +134,7 @@
       <PrecompiledHeader>Use</PrecompiledHeader>
       <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
       <AdditionalIncludeDirectories>$(ProjectDir)vendor\assimp\out\build\$(Platform)-$(Configuration)\include;$(ProjectDir)vendor\assimp\include;$(ProjectDir)vendor\stb;$(ProjectDir)vendor\vulkan\Include;$(ProjectDir)vendor\glm;$(ProjectDir)vendor\glfw\include;$(ProjectDir)header;</AdditionalIncludeDirectories>
-      <LanguageStandard>stdcpp17</LanguageStandard>
+      <LanguageStandard>stdcpp20</LanguageStandard>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>

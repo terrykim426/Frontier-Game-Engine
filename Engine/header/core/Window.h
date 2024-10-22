@@ -5,7 +5,7 @@
 #include "core/Delegate.h"
 #include "event/WindowEvent.h"
 
-DECLARE_DELEGATE_ONE(Window, const std::shared_ptr<FGEngine::IWindowEvent>&);
+DECLARE_DELEGATE(Window, const std::shared_ptr<FGEngine::IWindowEvent>&);
 
 namespace FGEngine
 {
@@ -39,7 +39,7 @@ namespace FGEngine
 		virtual void SetVSync(bool bEnable) = 0;
 		virtual bool IsVSync() = 0;
 
-		DELEGATE_PTR(WindowDelegate, windowDelegate);
+		WindowDelegate windowDelegate;
 
 		static IWindow* Create(const WindowProperties& properties = WindowProperties());
 	};

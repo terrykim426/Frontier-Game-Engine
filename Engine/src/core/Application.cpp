@@ -8,12 +8,12 @@ Application::Application()
 {
 	bIsRunning = true;
 	window = std::unique_ptr<IWindow>(IWindow::Create());
-	windowEventHandle = window->windowDelegate->Add1(this, Application::OnWindowEvent);
-
+	window->windowDelegate.AddFunction(this, Application::OnWindowEvent);
 }
 
 Application::~Application()
 {
+	window->windowDelegate.RemoveFunction(this, Application::OnWindowEvent);
 	window.reset();
 }
 

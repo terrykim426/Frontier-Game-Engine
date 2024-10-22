@@ -2,6 +2,8 @@
 
 #include "vulkan/vulkan_core.h"
 
+#include <memory>
+
 namespace FGEngine
 {
 	class VulkanLogicalDevice;

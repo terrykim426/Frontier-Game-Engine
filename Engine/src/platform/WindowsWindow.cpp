@@ -35,10 +35,7 @@ void WindowsWindow::Init(const WindowProperties& windowProperties)
 		bIsInitialized = true;
 	}
 
-	if (!windowEventHandle.IsValid())
-	{
-		windowEventHandle = windowData.windowDelegate->Add1(this, WindowsWindow::OnWindowEvent);
-	}
+	windowData.windowDelegate.AddFunction(this, WindowsWindow::OnWindowEvent);
 
 	// TODO: to be set from external source
 	//rendererAPI = ERendererAPI::OpenGL;
@@ -68,32 +65,32 @@ void WindowsWindow::Init(const WindowProperties& windowProperties)
 			auto* data = (WindowData*)glfwGetWindowUserPointer(glWindow);
 			data->width = width;
 			data->height = height;
-			data->windowDelegate->Broadcast(std::make_shared<WindowResizeEvent>(width, height));
+			data->windowDelegate.Broadcast(std::make_shared<WindowResizeEvent>(width, height));
 		});
 
 	glfwSetWindowCloseCallback(nativeWindow, [](GLFWwindow* window)
 		{
 			auto* data = (WindowData*)glfwGetWindowUserPointer(window);
-			data->windowDelegate->Broadcast(std::make_shared<WindowClosedEvent>());
+			data->windowDelegate.Broadcast(std::make_shared<WindowClosedEvent>());
 		});
 
 	glfwSetWindowFocusCallback(nativeWindow, [](GLFWwindow* glWindow, int focused)
 		{
 			auto* data = (WindowData*)glfwGetWindowUserPointer(glWindow);
-			data->windowDelegate->Broadcast(std::make_shared<WindowFocusChangedEvent>(focused));
+			data->windowDelegate.Broadcast(std::make_shared<WindowFocusChangedEvent>(focused));
 		});
 
 
 	glfwSetCursorPosCallback(nativeWindow, [](GLFWwindow* glWindow, double xpos, double ypos)
 		{
 			auto* data = (WindowData*)glfwGetWindowUserPointer(glWindow);
-			data->windowDelegate->Broadcast(std::make_shared<CursorPositionEvent>(xpos, ypos));
+			data->windowDelegate.Broadcast(std::make_shared<CursorPositionEvent>(xpos, ypos));
 		});
 
 	glfwSetCursorEnterCallback(nativeWindow, [](GLFWwindow* glWindow, int entered)
 		{
 			auto* data = (WindowData*)glfwGetWindowUserPointer(glWindow);
-			data->windowDelegate->Broadcast(std::make_shared<CursorEnterChangedEvent>(entered));
+			data->windowDelegate.Broadcast(std::make_shared<CursorEnterChangedEvent>(entered));
 		});
 
 	glfwSetMouseButtonCallback(nativeWindow, [](GLFWwindow* glWindow, int button, int action, int mods)
@@ -102,10 +99,10 @@ void WindowsWindow::Init(const WindowProperties& windowProperties)
 			switch (action)
 			{
 			case GLFW_PRESS:
-				data->windowDelegate->Broadcast(std::make_shared<MousePressedEvent>(button, mods));
+				data->windowDelegate.Broadcast(std::make_shared<MousePressedEvent>(button, mods));
 				break;
 			case GLFW_RELEASE:
-				data->windowDelegate->Broadcast(std::make_shared<MouseReleasedEvent>(button, mods));
+				data->windowDelegate.Broadcast(std::make_shared<MouseReleasedEvent>(button, mods));
 				break;
 			}
 		});
@@ -113,7 +110,7 @@ void WindowsWindow::Init(const WindowProperties& windowProperties)
 	glfwSetScrollCallback(nativeWindow, [](GLFWwindow* glWindow, double xoffset, double yoffset)
 		{
 			auto* data = (WindowData*)glfwGetWindowUserPointer(glWindow);
-			data->windowDelegate->Broadcast(std::make_shared<MouseScrolledEvent>(xoffset, yoffset));
+			data->windowDelegate.Broadcast(std::make_shared<MouseScrolledEvent>(xoffset, yoffset));
 		});
 
 	glfwSetKeyCallback(nativeWindow, [](GLFWwindow* glWindow, int key, int scancode, int action, int mods)
@@ -122,13 +119,13 @@ void WindowsWindow::Init(const WindowProperties& windowProperties)
 			switch (action)
 			{
 			case GLFW_PRESS:
-				data->windowDelegate->Broadcast(std::make_shared<KeyPressedEvent>(key, mods));
+				data->windowDelegate.Broadcast(std::make_shared<KeyPressedEvent>(key, mods));
 				break;
 			case GLFW_RELEASE:
-				data->windowDelegate->Broadcast(std::make_shared<KeyReleasedEvent>(key, mods));
+				data->windowDelegate.Broadcast(std::make_shared<KeyReleasedEvent>(key, mods));
 				break;
 			case GLFW_REPEAT:
-				data->windowDelegate->Broadcast(std::make_shared<KeyRepeatedEvent>(key, mods));
+				data->windowDelegate.Broadcast(std::make_shared<KeyRepeatedEvent>(key, mods));
 				break;
 			}
 		});
@@ -136,6 +133,7 @@ void WindowsWindow::Init(const WindowProperties& windowProperties)
 
 void WindowsWindow::Shutdown()
 {
+	windowData.windowDelegate.RemoveFunction(this, WindowsWindow::OnWindowEvent);
 	Renderer::Shutdown();
 	glfwDestroyWindow(nativeWindow);
 	glfwTerminate();
@@ -150,7 +148,7 @@ void WindowsWindow::OnWindowEvent(const std::shared_ptr<IWindowEvent>& windowEve
 		break;
 	}
 
-	windowDelegate->Broadcast(windowEvent);
+	windowDelegate.Broadcast(windowEvent);
 }
 
 unsigned int WindowsWindow::GetWidth() const

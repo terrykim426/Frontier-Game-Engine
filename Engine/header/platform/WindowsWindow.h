@@ -33,7 +33,6 @@ namespace FGEngine
 		static bool bIsInitialized;
 		GLFWwindow* nativeWindow;
 		ERendererAPI rendererAPI;
-		DelegateHandle windowEventHandle;
 
 		struct WindowData
 		{
@@ -43,7 +42,7 @@ namespace FGEngine
 
 			bool bVSync;
 
-			DELEGATE_PTR(WindowDelegate, windowDelegate);
+			WindowDelegate windowDelegate;
 		};
 		WindowData windowData;
 	};

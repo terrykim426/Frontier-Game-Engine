@@ -38,7 +38,6 @@ namespace FGEngine
 #pragma warning (suppress : 4251)
 		std::unique_ptr<IWindow> window;
 		AppLayerStack layerStack;
-		DelegateHandle windowEventHandle;
 	};
 
 	// to be defined in client

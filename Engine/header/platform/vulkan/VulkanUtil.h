@@ -4,6 +4,7 @@
 #include "renderer/Vertex.h"
 
 #include <array>
+#include <memory>
 
 namespace FGEngine
 {
