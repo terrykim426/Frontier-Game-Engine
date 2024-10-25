@@ -5,8 +5,8 @@
 #include <algorithm>
 
 #define DECLARE_DELEGATE(_name, ...) \
-    template class __declspec(dllexport) FGEngine::Delegate<__VA_ARGS__>; \
-    class __declspec(dllexport) _name##Delegate : public FGEngine::Delegate<__VA_ARGS__> {};
+    template class FGEngine::Delegate<__VA_ARGS__>; \
+    class _name##Delegate : public FGEngine::Delegate<__VA_ARGS__> {};
 
 #define AddFunction(_owner, _funcName)			__Add(std::bind_front(&_funcName, _owner));
 #define RemoveFunction(_owner, _funcName)		__Remove(std::bind_front(&_funcName, _owner));
@@ -15,7 +15,7 @@
 namespace FGEngine
 {
 template <typename... Params>
-class ENGINE_API Delegate
+class Delegate
 {
 public:
 	void __Add(const std::function<void(Params...)>& func)
@@ -52,8 +52,6 @@ public:
 	}
 
 private:
-	// TODO: should properly handle this warning someday...
-#pragma warning (suppress : 4251)
 	std::vector<std::function<void(Params...)>> funcVec;
 };
 }

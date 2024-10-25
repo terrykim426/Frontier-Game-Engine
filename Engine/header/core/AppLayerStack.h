@@ -7,7 +7,7 @@ namespace FGEngine
 {
 	class AppLayer;
 
-	class ENGINE_API AppLayerStack
+	class AppLayerStack
 	{
 	public:
 		AppLayerStack() = default;
@@ -31,7 +31,6 @@ namespace FGEngine
 		std::vector<AppLayer*>::const_reverse_iterator rend() const { return layers.rend(); }
 
 	private:
-#pragma warning (suppress : 4251) // need to find out how to resolve this warning correctly
 		std::vector<AppLayer*> layers;
 		unsigned int layerInsertIndex = 0;
 	};
