@@ -167,6 +167,9 @@
     <ClInclude Include="header\renderer\RendererProperties.h" />
     <ClInclude Include="header\renderer\Model.h" />
     <ClInclude Include="header\renderer\Mesh.h" />
+    <ClInclude Include="header\core\InputSubsystem.h" />
+    <ClInclude Include="header\subsystem\EngineSubsystem.h" />
+    <ClInclude Include="header\subsystem\SubsystemManager.h" />
     <ClInclude Include="pch.h" />
     <ClInclude Include="header\event\WindowEvent.h" />
     <ClInclude Include="header\renderer\RendererAPI.h" />
@@ -187,6 +190,7 @@
     <ClInclude Include="header\platform\vulkan\VulkanDescriptor.h" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="src\core\InputSubsystem.cpp" />
     <ClCompile Include="src\platform\vulkan\VulkanTextureImageView.cpp" />
     <ClCompile Include="src\renderer\Shader.cpp" />
     <ClCompile Include="src\renderer\Mesh.cpp" />

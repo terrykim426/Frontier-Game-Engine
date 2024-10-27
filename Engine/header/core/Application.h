@@ -38,6 +38,8 @@ namespace FGEngine
 
 		std::unique_ptr<IWindow> window;
 		AppLayerStack layerStack;
+
+		class InputSubsystem* inputSubsystem;
 	};
 
 	// to be defined in client

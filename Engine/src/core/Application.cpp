@@ -1,6 +1,8 @@
 #include "pch.h"
 #include "core/Application.h"
 #include "core/AppLayer.h"
+#include "core/InputSubsystem.h"
+#include "subsystem/SubsystemManager.h"
 
 namespace FGEngine
 {
@@ -9,6 +11,8 @@ Application::Application()
 	bIsRunning = true;
 	window = std::unique_ptr<IWindow>(IWindow::Create());
 	window->windowDelegate.AddFunction(this, Application::OnWindowEvent);
+
+	inputSubsystem = SubsystemManager::Get().RegisterSubsystem<InputSubsystem>();
 }
 
 Application::~Application()
@@ -28,6 +32,7 @@ void Application::Run()
 		}
 
 		window->OnUpdate(deltaTime);
+		inputSubsystem->ProcessQueue();
 	}
 }
 
@@ -80,6 +85,7 @@ void Application::OnWindowEvent(const std::shared_ptr<IWindowEvent>& windowEvent
 	case EWindowEventType::KeyReleased:
 	case EWindowEventType::KeyRepeated:
 	{
+		inputSubsystem->AddQueue(windowEvent);
 	}
 	break;
 	}
