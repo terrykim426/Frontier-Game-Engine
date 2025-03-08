@@ -17,6 +17,7 @@ Application::Application()
 
 Application::~Application()
 {
+	SubsystemManager::Get().UnregisterSubsystem<InputSubsystem>();
 	window->windowDelegate.RemoveFunction(this, Application::OnWindowEvent);
 	window.reset();
 }

@@ -45,10 +45,10 @@ public:
 		static_assert(std::is_base_of<EngineSubsystem, TSubSystem>::value, "TSubSystem must derive from EngineSubsystem");
 
 		std::type_index idx = typeid(TSubSystem);
-		std::remove_if(engineSubsystems.begin(), engineSubsystems.end(),
-			[](auto& p)
+		std::erase_if(engineSubsystems,
+			[&idx](const auto& p)
 			{
-				return p.first == typeid(TSubSystem);
+				return p.first == idx;
 			});
 	}
 
