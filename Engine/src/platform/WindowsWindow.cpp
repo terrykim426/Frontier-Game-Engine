@@ -3,7 +3,6 @@
 #include "core/Logger.h"
 #include "event/MouseEvent.h"
 #include "event/KeyboardEvent.h"
-#include "renderer/Renderer.h"
 
 #include <iostream>
 #include <memory>
@@ -37,28 +36,20 @@ void WindowsWindow::Init(const WindowProperties& windowProperties)
 
 	windowData.windowDelegate.AddFunction(this, WindowsWindow::OnWindowEvent);
 
-	// TODO: to be set from external source
-	//rendererAPI = ERendererAPI::OpenGL;
-	rendererAPI = ERendererAPI::Vulkan;
-
-	if (rendererAPI == ERendererAPI::Vulkan)
+	if (windowProperties.bNoAPI)
 	{
 		glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
 	}
 
 	nativeWindow = glfwCreateWindow(windowData.width, windowData.height, windowData.title.c_str(), nullptr, nullptr);
 
-	if (rendererAPI == ERendererAPI::OpenGL)
+	if (!windowProperties.bNoAPI)
 	{
 		glfwMakeContextCurrent(nativeWindow);
 	}
 	glfwSetWindowUserPointer(nativeWindow, &windowData);
 
 	SetVSync(true);
-
-	Renderer::Init(RendererProperties(rendererAPI, nativeWindow));
-	//Renderer::SetClearColor(1, 0, 1, 1);
-	Renderer::SetClearColor(0.02f, 0.02f, 0.02f, 1);
 
 	glfwSetWindowSizeCallback(nativeWindow, [](GLFWwindow* glWindow, int width, int height)
 		{
@@ -134,20 +125,12 @@ void WindowsWindow::Init(const WindowProperties& windowProperties)
 void WindowsWindow::Shutdown()
 {
 	windowData.windowDelegate.RemoveFunction(this, WindowsWindow::OnWindowEvent);
-	Renderer::Shutdown();
 	glfwDestroyWindow(nativeWindow);
 	glfwTerminate();
 }
 
 void WindowsWindow::OnWindowEvent(const std::shared_ptr<IWindowEvent>& windowEvent)
 {
-	switch (windowEvent->GetEventType())
-	{
-	case EWindowEventType::WindowResize:
-		Renderer::Resize();
-		break;
-	}
-
 	windowDelegate.Broadcast(windowEvent);
 }
 
@@ -163,11 +146,7 @@ unsigned int WindowsWindow::GetHeight() const
 
 void WindowsWindow::OnUpdate(float deltaTime)
 {
-	Renderer::Clear();
-
 	glfwPollEvents();
-
-	Renderer::Render(nativeWindow);
 }
 
 void WindowsWindow::SetVSync(bool bEnable)

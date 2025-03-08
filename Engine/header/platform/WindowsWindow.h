@@ -3,7 +3,6 @@
 #include "GLFW/glfw3.h"
 
 #include "core/Window.h"
-#include "renderer/RendererProperties.h"
 
 namespace FGEngine
 {
@@ -19,6 +18,7 @@ namespace FGEngine
 		// Inherited via IWindow
 		virtual unsigned int GetWidth() const override;
 		virtual unsigned int GetHeight() const override;
+		virtual GLFWwindow* GetNativeWindow() const override { return nativeWindow; }
 		virtual void OnUpdate(float deltaTime) override;
 		virtual void SetVSync(bool bEnable) override;
 		virtual bool IsVSync() override;
@@ -32,7 +32,6 @@ namespace FGEngine
 	private:
 		static bool bIsInitialized;
 		GLFWwindow* nativeWindow;
-		ERendererAPI rendererAPI;
 
 		struct WindowData
 		{

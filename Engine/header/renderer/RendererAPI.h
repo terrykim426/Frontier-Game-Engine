@@ -1,7 +1,7 @@
 #pragma once
 
 #include <string>
-#include "renderer/Renderer.h"
+#include "renderer/RendererProperties.h"
 
 namespace FGEngine
 {

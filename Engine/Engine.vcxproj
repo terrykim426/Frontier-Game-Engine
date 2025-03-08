@@ -149,7 +149,6 @@
   <ItemGroup>
     <ClInclude Include="header\platform\vulkan\VulkanDefineType.h" />
     <ClInclude Include="header\platform\vulkan\VulkanTextureImageView.h" />
-    <ClInclude Include="header\renderer\Renderer.h" />
     <ClInclude Include="header\event\KeyboardEvent.h" />
     <ClInclude Include="header\event\MouseEvent.h" />
     <ClInclude Include="header\platform\WindowsWindow.h" />
@@ -188,8 +187,10 @@
     <ClInclude Include="header\platform\vulkan\VulkanImageView.h" />
     <ClInclude Include="header\platform\vulkan\VulkanBuffer.h" />
     <ClInclude Include="header\platform\vulkan\VulkanDescriptor.h" />
+    <ClInclude Include="header\renderer\RendererSubsystem.h" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="src\renderer\RendererSubsystem.cpp" />
     <ClCompile Include="src\core\InputSubsystem.cpp" />
     <ClCompile Include="src\platform\vulkan\VulkanTextureImageView.cpp" />
     <ClCompile Include="src\renderer\Shader.cpp" />
@@ -197,7 +198,6 @@
     <ClCompile Include="src\renderer\Model.cpp" />
     <ClCompile Include="src\platform\openGL\OpenGLRendererAPI.cpp" />
     <ClCompile Include="src\renderer\RendererAPI.cpp" />
-    <ClCompile Include="src\core\Renderer.cpp" />
     <ClCompile Include="src\core\Window.cpp" />
     <ClCompile Include="src\platform\WindowsWindow.cpp" />
     <ClCompile Include="src\core\Logger.cpp" />

@@ -3,21 +3,40 @@
 #include "core/AppLayer.h"
 #include "core/InputSubsystem.h"
 #include "subsystem/SubsystemManager.h"
+#include "renderer/RendererSubsystem.h"
 
 namespace FGEngine
 {
 Application::Application()
 {
 	bIsRunning = true;
-	window = std::unique_ptr<IWindow>(IWindow::Create());
+	ERendererAPI rendererAPI = ERendererAPI::Vulkan;
+	
+	// windows
+	WindowProperties windowProperties;
+	windowProperties.bNoAPI = rendererAPI == ERendererAPI::Vulkan;
+	window = std::unique_ptr<IWindow>(IWindow::Create(windowProperties));
 	window->windowDelegate.AddFunction(this, Application::OnWindowEvent);
 
+	// input
 	inputSubsystem = SubsystemManager::Get().RegisterSubsystem<InputSubsystem>();
+
+	// renderer
+	RendererProperties rendererProperties(rendererAPI, window->GetNativeWindow());
+	rendererSubsystem = SubsystemManager::Get().RegisterSubsystem<RendererSubsystem>(rendererProperties);
+	rendererSubsystem->SetClearColor(0.02f, 0.02f, 0.02f, 1);
+	window->windowDelegate.AddFunction(rendererSubsystem, RendererSubsystem::Resize);
 }
 
 Application::~Application()
 {
+	window->windowDelegate.RemoveFunction(rendererSubsystem, RendererSubsystem::Resize);
+	SubsystemManager::Get().UnregisterSubsystem<RendererSubsystem>();
+	rendererSubsystem = nullptr;
+
 	SubsystemManager::Get().UnregisterSubsystem<InputSubsystem>();
+	inputSubsystem = nullptr;
+
 	window->windowDelegate.RemoveFunction(this, Application::OnWindowEvent);
 	window.reset();
 }
@@ -34,6 +53,9 @@ void Application::Run()
 
 		window->OnUpdate(deltaTime);
 		inputSubsystem->ProcessQueue();
+
+		rendererSubsystem->Clear();
+		rendererSubsystem->Render();
 	}
 }
 

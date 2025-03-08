@@ -40,6 +40,7 @@ namespace FGEngine
 		AppLayerStack layerStack;
 
 		class InputSubsystem* inputSubsystem;
+		class RendererSubsystem* rendererSubsystem;
 	};
 
 	// to be defined in client

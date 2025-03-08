@@ -14,10 +14,12 @@ namespace FGEngine
 	public:
 		WindowProperties(const std::string& title = "Frontier Game Engine", 
 						 unsigned int width = 640, 
-						 unsigned int height = 480) :
+						 unsigned int height = 480,
+						 bool bNoAPI = false) :
 			title(title),
 			width(width),
-			height(height)
+			height(height),
+			bNoAPI(bNoAPI)
 		{
 		}
 
@@ -25,6 +27,7 @@ namespace FGEngine
 		std::string title;
 		unsigned int width;
 		unsigned int height;
+		bool bNoAPI;
 	};
 
 	class IWindow
@@ -34,6 +37,7 @@ namespace FGEngine
 
 		virtual unsigned int GetWidth() const = 0;
 		virtual unsigned int GetHeight() const = 0;
+		virtual struct GLFWwindow* GetNativeWindow() const = 0;
 
 		virtual void OnUpdate(float deltaTime) = 0;
 		virtual void SetVSync(bool bEnable) = 0;
